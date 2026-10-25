@@ -7,7 +7,7 @@ import {
 } from "./util.js";
 import {
   ORB_ID, getPower, setPower, clearPower, isUnlocked, cooldownTicks, dmgMul, addXp, bumpStat,
-  ensureOrb, giveAbilityItems, getBrinkCount, setBrinkCount,
+  ensureOrb, giveAbilityItems, getBrinkCount, setBrinkCount, migrateItems,
 } from "./data.js";
 import { openMainMenu, openOblivion, openAdmin } from "./ui.js";
 
@@ -86,12 +86,7 @@ function castFromItem(player, itemId) {
   }
   startCooldown(player, ability, result === "nocd" ? 20 : cooldownTicks(player, ability));
   if (ability.ult) {
-    player.onScreenDisplay.setTitle(" ", {
-      subtitle: `${power.color}§l${ability.name.toUpperCase()}`,
-      fadeInDuration: 2,
-      stayDuration: 25,
-      fadeOutDuration: 8,
-    });
+    actionbar(player, `${power.color}§l${ability.name.toUpperCase()}`);
   }
   bumpStat(player, "uses");
 }
@@ -248,6 +243,7 @@ world.afterEvents.playerSpawn.subscribe((ev) => {
   const p = ev.player;
   system.runTimeout(() => {
     if (!isValid(p)) return;
+    migrateItems(p);
     ensureOrb(p);
     if (getPower(p)) giveAbilityItems(p);
     if (ev.initialSpawn && !p.getDynamicProperty("aw:welcomed")) {
@@ -290,24 +286,34 @@ function heldAbility(player) {
   }
 }
 
+// Строка над хотбаром показывается только при смене состояния (выбор предмета,
+// конец перезарядки) и сама гаснет. Постоянное обновление держало на экране
+// тёмную плашку, закрывавшую обзор.
+const hudState = new Map(); // playerId -> ключ последнего показанного состояния
+
 function hud(player, power) {
-  if ((actionbarHold.get(player.id) ?? 0) > system.currentTick) return;
   const id = heldAbility(player);
-  if (!id || !id.startsWith("aw:" + power.id)) return;
+  if (!id || !id.startsWith("aw:" + power.id)) {
+    hudState.delete(player.id);
+    return;
+  }
+  if ((actionbarHold.get(player.id) ?? 0) > system.currentTick) return;
   const ab = power.abilities[Number(id.slice(-1)) - 1];
   const ult = power.abilities.find((a) => a.ult);
+  const left = cdLeft(player, ab.id);
+  const ultReady = ult && !ab.ult && isUnlocked(player, ult) && cdLeft(player, ult.id) === 0;
+  const key = `${id}|${isUnlocked(player, ab)}|${left > 0}|${ultReady}`;
+  if (hudState.get(player.id) === key) return;
+  hudState.set(player.id, key);
+
   if (!isUnlocked(player, ab)) {
     actionbar(player, `§8${ab.name}: откроется на ${ab.unlock} ур.`, false);
     return;
   }
-  const left = cdLeft(player, ab.id);
   let text = left > 0
-    ? `${power.color}${ab.name} §7| §c${(left / 20).toFixed(1)} с`
+    ? `${power.color}${ab.name} §7| §c${Math.ceil(left / 20)} с`
     : `${power.color}${ab.name} §7| §aготово`;
-  if (ult && !ab.ult && isUnlocked(player, ult)) {
-    const ul = cdLeft(player, ult.id);
-    text += ul > 0 ? `   §8ульта ${Math.ceil(ul / 20)} с` : "   §6ульта готова";
-  }
+  if (ultReady) text += " §6| ульта";
   actionbar(player, text, false);
 }
 

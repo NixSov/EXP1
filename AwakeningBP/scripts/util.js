@@ -262,7 +262,7 @@ export function projectile(caster, opts) {
         opts.onHit(pos, hitEntity);
         return;
       }
-      if (i % 2 === 0) for (const p of opts.particles) particle(dim, p, pos);
+      if (i % 2 === 0 && travelled > 2.5) for (const p of opts.particles) particle(dim, p, pos);
     }
   }, 1);
 }

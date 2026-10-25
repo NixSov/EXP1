@@ -120,6 +120,19 @@ export function hasItem(p, id) {
   return false;
 }
 
+/** Заменить старые предметы аддона с подписью (версия 1.0.0) на новые без неё. */
+export function migrateItems(p) {
+  const inv = inventory(p);
+  if (!inv) return;
+  for (let i = 0; i < inv.size; i++) {
+    const it = inv.getItem(i);
+    if (!it || !/^aw:/.test(it.typeId) || it.typeId === "aw:oblivion_shard") continue;
+    try {
+      if (it.getLore().length) inv.setItem(i, makeLocked(it.typeId));
+    } catch {}
+  }
+}
+
 export function giveItem(p, item) {
   const inv = inventory(p);
   const rest = inv?.addItem(item);
@@ -127,7 +140,7 @@ export function giveItem(p, item) {
 }
 
 export function ensureOrb(p) {
-  if (!hasItem(p, ORB_ID)) giveItem(p, makeLocked(ORB_ID, ["§7Нажми, чтобы открыть меню силы"]));
+  if (!hasItem(p, ORB_ID)) giveItem(p, makeLocked(ORB_ID));
 }
 
 /** Выдать недостающие предметы открытых способностей. Возвращает число выданных. */
@@ -137,7 +150,7 @@ export function giveAbilityItems(p) {
   let n = 0;
   for (const ab of power.abilities) {
     if (!isUnlocked(p, ab) || hasItem(p, ab.id)) continue;
-    giveItem(p, makeLocked(ab.id, [`§7${ab.desc}`, ab.ult ? "§6Ульта" : "§8Присядь + нажми — ульта"]));
+    giveItem(p, makeLocked(ab.id));
     n++;
   }
   return n;

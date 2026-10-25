@@ -61,7 +61,7 @@ function fireDash(p, m) {
   const hit = new Set();
   repeat(10, 1, () => {
     if (!isValid(p)) return;
-    particleSphere(p.dimension, "minecraft:basic_flame_particle", p.location, 0.7, 6);
+    particleRing(p.dimension, "minecraft:basic_flame_particle", p.location, 1, 6, 0.1);
     for (const e of targetsInRadius(p, p.location, 2.2)) {
       if (hit.has(e.id)) continue;
       hit.add(e.id);
@@ -78,7 +78,7 @@ function flamethrower(p, m) {
     if (!isValid(p)) return;
     const eye = p.getHeadLocation();
     const dir = p.getViewDirection();
-    for (let d = 1; d <= 7; d += 1) {
+    for (let d = 2.5; d <= 7; d += 1) {
       const spread = d * 0.25;
       particle(p.dimension, "minecraft:basic_flame_particle", {
         x: eye.x + dir.x * d + (Math.random() - 0.5) * spread,
@@ -195,7 +195,7 @@ function frostBreath(p, m) {
   sound(p.dimension, "mob.player.hurt_freeze", p.location, 0.8);
   const eye = p.getHeadLocation();
   const dir = p.getViewDirection();
-  for (let d = 1; d <= 8; d += 0.5) {
+  for (let d = 2.5; d <= 8; d += 0.5) {
     for (let k = 0; k < 3; k++) {
       const spread = d * 0.3;
       particle(p.dimension, "minecraft:snowflake_particle", {
@@ -220,7 +220,7 @@ function iceArmor(p, m) {
   cryoArmorUntil.set(p.id, system.currentTick + ticks);
   sound(p.dimension, "random.glass", p.location, 0.6);
   repeat(ticks / 10, 10, () => {
-    if (isValid(p)) particleRing(p.dimension, "minecraft:snowflake_particle", p.location, 0.9, 10, 1);
+    if (isValid(p)) particleRing(p.dimension, "minecraft:snowflake_particle", p.location, 1.3, 10, 0.1);
   });
   return true;
 }
@@ -314,7 +314,7 @@ function stormDash(p, m) {
   dash(p, 3.4, 0.3);
   sound(p.dimension, "ambient.weather.thunder", p.location, 1.8, 0.5);
   repeat(8, 1, () => {
-    if (isValid(p)) particleSphere(p.dimension, "minecraft:electric_spark_particle", p.location, 0.6, 5);
+    if (isValid(p)) particleRing(p.dimension, "minecraft:electric_spark_particle", p.location, 1, 6, 0.1);
   }, () => {
     if (!isValid(p)) return;
     particleRing(p.dimension, "minecraft:electric_spark_particle", p.location, 3, 24, 0.3);
