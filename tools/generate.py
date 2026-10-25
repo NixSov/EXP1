@@ -237,9 +237,9 @@ def item_json(identifier, icon, cooldown_cat=None, glint=False):
     comps = {
         "minecraft:icon": {"textures": {"default": icon}},
         "minecraft:max_stack_size": 1,
-        "minecraft:hand_equipped": True,
-        "minecraft:glint": glint,
     }
+    if glint:
+        comps["minecraft:glint"] = True
     if cooldown_cat:
         comps["minecraft:cooldown"] = {"category": cooldown_cat, "duration": 0.25}
     return {
@@ -277,7 +277,7 @@ def main():
         tex = "aw_" + ident
         textures[tex] = {"textures": f"textures/items/aw/{ident}"}
         write_json(os.path.join(items_dir, ident + ".json"),
-                   item_json("aw:" + ident, tex, glint=ident == "awakening_orb"))
+                   item_json("aw:" + ident, tex))
 
     js_powers = {}
     for power in POWERS:
@@ -288,7 +288,7 @@ def main():
             save_icon(short, ab["shape"], power["palette"], ab["ult"])
             textures[tex] = {"textures": f"textures/items/aw/{short}"}
             write_json(os.path.join(items_dir, short + ".json"),
-                       item_json(ab["id"], tex, cooldown_cat=tex, glint=ab["ult"]))
+                       item_json(ab["id"], tex, cooldown_cat=tex))
             lang.append(f"item.{ab['id']}.name={power['color']}{ab['name']}")
             js_abilities.append({
                 "id": ab["id"], "index": ab["index"], "name": ab["name"],

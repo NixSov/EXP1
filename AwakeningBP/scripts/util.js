@@ -1,4 +1,4 @@
-import { system, EntityDamageCause } from "@minecraft/server";
+import { world, system, EntityDamageCause } from "@minecraft/server";
 
 // ---------------------------------------------------------------- векторы
 
@@ -32,7 +32,28 @@ export function isValid(e) {
 
 // ---------------------------------------------------------------- эффекты
 
+// Частица вплотную к камере превращается в огромный квадрат на весь экран
+// (на телефоне — чёрный). Поэтому рядом с головой игрока частицы не создаём.
+const CAMERA_CLEARANCE = 2.2;
+let headsTick = -1;
+let heads = [];
+
+function nearCamera(dim, loc) {
+  if (headsTick !== system.currentTick) {
+    headsTick = system.currentTick;
+    heads = [];
+    for (const p of world.getAllPlayers()) {
+      try {
+        heads.push({ dimId: p.dimension.id, loc: p.getHeadLocation() });
+      } catch {}
+    }
+  }
+  for (const h of heads) if (h.dimId === dim.id && V.dist(h.loc, loc) < CAMERA_CLEARANCE) return true;
+  return false;
+}
+
 export function particle(dim, id, loc) {
+  if (nearCamera(dim, loc)) return;
   try {
     dim.spawnParticle(id, loc);
   } catch {}

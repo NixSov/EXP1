@@ -4,17 +4,17 @@
     "name": "§6Пробуждение §7(ресурсы)",
     "description": "Текстуры и переводы для аддона «Пробуждение».",
     "uuid": "bf4d3a01-0831-433c-ac2e-350a10a5499a",
-    "version": [1, 0, 1],
+    "version": [1, 0, 2],
     "min_engine_version": [1, 21, 90]
   },
   "modules": [
     {
       "type": "resources",
       "uuid": "e325e235-7d19-4989-90e3-6b5766e13bd4",
-      "version": [1, 0, 1]
+      "version": [1, 0, 2]
     }
   ],
   "dependencies": [
-    { "uuid": "5bd6e6cf-6af4-4cc8-ad44-f427c71e50b2", "version": [1, 0, 1] }
+    { "uuid": "5bd6e6cf-6af4-4cc8-ad44-f427c71e50b2", "version": [1, 0, 2] }
   ]
 }

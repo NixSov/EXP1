@@ -14,8 +14,6 @@
         }
       },
       "minecraft:max_stack_size": 1,
-      "minecraft:hand_equipped": true,
-      "minecraft:glint": false,
       "minecraft:cooldown": {
         "category": "aw_tele_4",
         "duration": 0.25

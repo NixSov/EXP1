@@ -13,9 +13,7 @@
           "default": "aw_oblivion_shard"
         }
       },
-      "minecraft:max_stack_size": 1,
-      "minecraft:hand_equipped": true,
-      "minecraft:glint": false
+      "minecraft:max_stack_size": 1
     }
   }
 }
