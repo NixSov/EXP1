@@ -1,0 +1,15 @@
+{
+  "format_version": "1.20.10",
+  "minecraft:recipe_shaped": {
+    "description": { "identifier": "aw:oblivion_shard" },
+    "tags": ["crafting_table"],
+    "pattern": ["DAD", "AYA", "DAD"],
+    "key": {
+      "D": "minecraft:diamond",
+      "A": "minecraft:amethyst_shard",
+      "Y": "minecraft:ender_eye"
+    },
+    "unlock": [{ "item": "minecraft:ender_eye" }],
+    "result": { "item": "aw:oblivion_shard" }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "format_version": 2,
+  "header": {
+    "name": "§6Пробуждение §7(поведение)",
+    "description": "Аналог The Awakening для Bedrock: пробуди силу на грани смерти. Управление адаптировано для телефона.",
+    "uuid": "5bd6e6cf-6af4-4cc8-ad44-f427c71e50b2",
+    "version": [1, 0, 0],
+    "min_engine_version": [1, 21, 90]
+  },
+  "modules": [
+    {
+      "type": "data",
+      "uuid": "0afbbebd-78f2-4a05-bee9-b7655433e2cc",
+      "version": [1, 0, 0]
+    },
+    {
+      "type": "script",
+      "language": "javascript",
+      "uuid": "ff971c27-da31-4f2d-ba2a-cd6f918ff241",
+      "version": [1, 0, 0],
+      "entry": "scripts/main.js"
+    }
+  ],
+  "dependencies": [
+    { "module_name": "@minecraft/server", "version": "2.0.0" },
+    { "module_name": "@minecraft/server-ui", "version": "2.0.0" },
+    { "uuid": "bf4d3a01-0831-433c-ac2e-350a10a5499a", "version": [1, 0, 0] }
+  ]
+}

@@ -1,0 +1,87 @@
+{
+  "resource_pack_name": "awakening",
+  "texture_name": "atlas.items",
+  "texture_data": {
+    "aw_awakening_orb": {
+      "textures": "textures/items/aw/awakening_orb"
+    },
+    "aw_oblivion_shard": {
+      "textures": "textures/items/aw/oblivion_shard"
+    },
+    "aw_pyro_1": {
+      "textures": "textures/items/aw/pyro_1"
+    },
+    "aw_pyro_2": {
+      "textures": "textures/items/aw/pyro_2"
+    },
+    "aw_pyro_3": {
+      "textures": "textures/items/aw/pyro_3"
+    },
+    "aw_pyro_4": {
+      "textures": "textures/items/aw/pyro_4"
+    },
+    "aw_pyro_5": {
+      "textures": "textures/items/aw/pyro_5"
+    },
+    "aw_cryo_1": {
+      "textures": "textures/items/aw/cryo_1"
+    },
+    "aw_cryo_2": {
+      "textures": "textures/items/aw/cryo_2"
+    },
+    "aw_cryo_3": {
+      "textures": "textures/items/aw/cryo_3"
+    },
+    "aw_cryo_4": {
+      "textures": "textures/items/aw/cryo_4"
+    },
+    "aw_cryo_5": {
+      "textures": "textures/items/aw/cryo_5"
+    },
+    "aw_storm_1": {
+      "textures": "textures/items/aw/storm_1"
+    },
+    "aw_storm_2": {
+      "textures": "textures/items/aw/storm_2"
+    },
+    "aw_storm_3": {
+      "textures": "textures/items/aw/storm_3"
+    },
+    "aw_storm_4": {
+      "textures": "textures/items/aw/storm_4"
+    },
+    "aw_storm_5": {
+      "textures": "textures/items/aw/storm_5"
+    },
+    "aw_tele_1": {
+      "textures": "textures/items/aw/tele_1"
+    },
+    "aw_tele_2": {
+      "textures": "textures/items/aw/tele_2"
+    },
+    "aw_tele_3": {
+      "textures": "textures/items/aw/tele_3"
+    },
+    "aw_tele_4": {
+      "textures": "textures/items/aw/tele_4"
+    },
+    "aw_tele_5": {
+      "textures": "textures/items/aw/tele_5"
+    },
+    "aw_grav_1": {
+      "textures": "textures/items/aw/grav_1"
+    },
+    "aw_grav_2": {
+      "textures": "textures/items/aw/grav_2"
+    },
+    "aw_grav_3": {
+      "textures": "textures/items/aw/grav_3"
+    },
+    "aw_grav_4": {
+      "textures": "textures/items/aw/grav_4"
+    },
+    "aw_grav_5": {
+      "textures": "textures/items/aw/grav_5"
+    }
+  }
+}
