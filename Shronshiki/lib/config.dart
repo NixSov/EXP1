@@ -20,18 +20,24 @@ class AppConfig {
   final String turnUsername;
   final String turnCredential;
 
-  static const _stunUrls = [
-    'stun:stun.l.google.com:19302',
-    'stun:stun1.l.google.com:19302',
-  ];
+  /// STUN-серверы: через них телефон узнаёт свой внешний адрес. Кроме Google —
+  /// российские (Яндекс, Sipnet) на случай, если зарубежные недоступны без VPN.
+  static const stunServers = {
+    'Google': 'stun:stun.l.google.com:19302',
+    'Яндекс': 'stun:stun.rtc.yandex.net:3478',
+    'Sipnet': 'stun:stun.sipnet.ru:3478',
+    'Cloudflare': 'stun:stun.cloudflare.com:3478',
+  };
+
+  bool get hasTurn => turnUrls.isNotEmpty && turnUsername.isNotEmpty;
 
   bool get isConfigured =>
       supabaseUrl.startsWith('http') && supabaseAnonKey.isNotEmpty;
 
   /// Список ICE-серверов для RTCPeerConnection.
   List<Map<String, dynamic>> get iceServers => [
-        {'urls': _stunUrls},
-        if (turnUrls.isNotEmpty && turnUsername.isNotEmpty)
+        {'urls': stunServers.values.toList()},
+        if (hasTurn)
           {
             'urls': turnUrls,
             'username': turnUsername,

@@ -337,9 +337,14 @@ class _ParticipantTile extends StatelessWidget {
             ),
             if (!p.connected)
               Text(
-                p.connection == RTCPeerConnectionState.RTCPeerConnectionStateFailed
-                    ? 'нет связи, нажмите «Обновить»'
-                    : 'подключение…',
+                switch (p.connection) {
+                  null || RTCPeerConnectionState.RTCPeerConnectionStateNew => 'ждём ответа…',
+                  RTCPeerConnectionState.RTCPeerConnectionStateConnecting => 'ищем путь…',
+                  RTCPeerConnectionState.RTCPeerConnectionStateDisconnected => 'связь прервалась…',
+                  RTCPeerConnectionState.RTCPeerConnectionStateFailed =>
+                    'нет прямого пути — нужен TURN',
+                  _ => 'подключение…',
+                },
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodySmall,
               ),

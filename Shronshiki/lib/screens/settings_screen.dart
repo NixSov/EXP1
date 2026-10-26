@@ -8,6 +8,7 @@ import '../app_state.dart';
 import '../services/background_call.dart';
 import '../services/call_session.dart';
 import '../services/diagnostics.dart';
+import '../services/ice_check.dart';
 import '../services/theme_settings.dart';
 import '../widgets/color_picker_dialog.dart';
 import 'errors.dart';
@@ -55,14 +56,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  Future<void> _runDiagnostics() async {
+  Future<void> _runDiagnostics() => _runCheck('Проверка связи', Diagnostics.run);
+
+  Future<void> _runIceCheck() => _runCheck('Прямое соединение', IceCheck.run);
+
+  Future<void> _runCheck(
+    String title,
+    Future<List<DiagResult>> Function(void Function(List<DiagResult>) onProgress) runner,
+  ) async {
     final results = ValueNotifier<List<DiagResult>>([]);
     final done = ValueNotifier(false);
-    Diagnostics.run((r) => results.value = r).whenComplete(() => done.value = true);
+    runner((r) => results.value = r).whenComplete(() => done.value = true);
     await showDialog<void>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Проверка связи'),
+        title: Text(title),
         content: ListenableBuilder(
           listenable: Listenable.merge([results, done]),
           builder: (context, _) => Column(
@@ -344,6 +352,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: const Text('Проверить связь с сервером'),
               subtitle: const Text('Покажет, мешает ли провайдер (сравните с VPN и без)'),
               onTap: _runDiagnostics,
+            ),
+            ListTile(
+              leading: const Icon(Icons.swap_horiz),
+              title: const Text('Проверить прямое соединение'),
+              subtitle: const Text('STUN и TURN: смогут ли телефоны найти друг друга'),
+              onTap: _runIceCheck,
             ),
             ExpansionTile(
               leading: const Icon(Icons.dns_outlined),
