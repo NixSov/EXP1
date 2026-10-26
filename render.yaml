@@ -1,0 +1,10 @@
+# Бесплатный хостинг сервера «MC Вместе» на render.com (Blueprint).
+services:
+  - type: web
+    name: mc-together
+    runtime: node
+    plan: free
+    rootDir: Together/server
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /

@@ -1,0 +1,15 @@
+{
+  "name": "mc-together-server",
+  "version": "1.0.0",
+  "description": "Сервер «MC Вместе»: голосовой чат и туннель к миру Minecraft PE",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test.js"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "ws": "8.18.0"
+  }
+}
