@@ -25,7 +25,10 @@ String describeError(Object error) {
     if (error.code == '42501') return 'Недостаточно прав для этого действия';
     return 'Ошибка сервера: ${error.message}';
   }
-  if (error is SocketException || error is TimeoutException || error is HttpException) {
+  if (error is TimeoutException) {
+    return 'Сервер долго не отвечает. Проверьте интернет или включите VPN.';
+  }
+  if (error is SocketException || error is HttpException) {
     return 'Нет связи с сервером. Проверьте интернет.';
   }
   final text = error.toString();

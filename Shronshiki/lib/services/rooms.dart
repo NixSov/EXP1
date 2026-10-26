@@ -35,6 +35,9 @@ class RoomsRepository {
 
   final SupabaseClient _db;
 
+  /// На медленном соединении запрос не должен висеть бесконечно.
+  static const _timeout = Duration(seconds: 20);
+
   static const codeLength = 6;
 
   /// Приводит введённый код или ссылку к виду ABC234.
@@ -53,12 +56,13 @@ class RoomsRepository {
         .from('rooms')
         .select('id, name, code, max_participants')
         .eq('owner_id', uid)
-        .order('created_at', ascending: false);
+        .order('created_at', ascending: false)
+        .timeout(_timeout);
     return rows.map(Room.fromMap).toList();
   }
 
   Future<Room> create(String name) async {
-    final row = await _db.rpc('create_room', params: {'p_name': name.trim()});
+    final row = await _db.rpc('create_room', params: {'p_name': name.trim()}).timeout(_timeout);
     return Room.fromMap(Map<String, dynamic>.from(row as Map));
   }
 
@@ -68,7 +72,7 @@ class RoomsRepository {
   Future<void> delete(String id) => _db.from('rooms').delete().eq('id', id);
 
   Future<Room?> findByCode(String code) async {
-    final rows = await _db.rpc('find_room', params: {'p_code': code}) as List;
+    final rows = await _db.rpc('find_room', params: {'p_code': code}).timeout(_timeout) as List;
     if (rows.isEmpty) return null;
     return Room.fromMap(Map<String, dynamic>.from(rows.first as Map));
   }

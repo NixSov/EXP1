@@ -77,6 +77,12 @@ class CallController extends ChangeNotifier {
   MediaStream? _localStream;
   Timer? _statsTimer;
   Timer? _presenceTimeout;
+  Timer? _connectTimeout;
+  Object? _lastChannelError;
+
+  /// Сколько ждём подключения к комнате. Realtime сам повторяет попытки,
+  /// поэтому на медленном мобильном интернете не сдаёмся после первой.
+  static const _connectLimit = Duration(seconds: 30);
   bool _tracked = false;
   bool _disposed = false;
   late final int _joinedAt;
@@ -139,6 +145,14 @@ class CallController extends ChangeNotifier {
     );
     _channel = channel;
 
+    _connectTimeout = Timer(_connectLimit, () {
+      if (status == CallStatus.connecting && !_tracked) {
+        _fail('Не удалось подключиться к комнате за ${_connectLimit.inSeconds} секунд. '
+            'Проверьте интернет или включите VPN.'
+            '${_lastChannelError != null ? '\n($_lastChannelError)' : ''}');
+      }
+    });
+
     channel
         .onBroadcast(event: 'signal', callback: _onSignal)
         .onPresenceSync((_) => _onPresenceSync())
@@ -156,10 +170,9 @@ class CallController extends ChangeNotifier {
           }
         case RealtimeSubscribeStatus.channelError:
         case RealtimeSubscribeStatus.timedOut:
-          if (status == CallStatus.connecting && !_tracked) {
-            _fail('Не удалось подключиться к комнате. Проверьте интернет.'
-                '${error != null ? '\n$error' : ''}');
-          }
+          // Realtime повторит попытку сам; окончательно сдаёмся по _connectTimeout.
+          _lastChannelError = error ?? state.name;
+          debugPrint('realtime $state: $error');
         case RealtimeSubscribeStatus.closed:
           break;
       }
@@ -192,6 +205,7 @@ class CallController extends ChangeNotifier {
       return;
     }
     _tracked = true;
+    _connectTimeout?.cancel();
     unawaited(_track());
   }
 
@@ -295,6 +309,7 @@ class CallController extends ChangeNotifier {
   Future<void> _teardown() async {
     _statsTimer?.cancel();
     _presenceTimeout?.cancel();
+    _connectTimeout?.cancel();
     for (final id in _peers.keys.toList()) {
       _closePeer(id);
     }
