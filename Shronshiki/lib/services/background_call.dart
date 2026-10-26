@@ -15,9 +15,21 @@ class BackgroundCall {
   static VoidCallback? onHangUp;
   static VoidCallback? onToggleMute;
 
+  /// Пока открыта «Проверка кнопки наушников», нажатия идут сюда, а не в микрофон.
+  static void Function(String key)? onMediaKeyTest;
+
   static void init() {
     if (!supported) return;
     _channel.setMethodCallHandler((call) async {
+      if (call.method == 'onMediaKey') {
+        final test = onMediaKeyTest;
+        if (test != null) {
+          test('${call.arguments}');
+        } else {
+          onToggleMute?.call();
+        }
+        return;
+      }
       if (call.method != 'onAction') return;
       switch (call.arguments) {
         case 'hangup':
@@ -54,6 +66,24 @@ class BackgroundCall {
     } catch (e) {
       debugPrint('call service stop failed: $e');
     }
+  }
+
+  static Future<void> startButtonTest(void Function(String key) onKey) async {
+    onMediaKeyTest = onKey;
+    if (!supported) return;
+    try {
+      await _channel.invokeMethod('startButtonTest');
+    } catch (e) {
+      debugPrint('button test start failed: $e');
+    }
+  }
+
+  static Future<void> stopButtonTest() async {
+    onMediaKeyTest = null;
+    if (!supported) return;
+    try {
+      await _channel.invokeMethod('stopButtonTest');
+    } catch (_) {}
   }
 
   static Future<void> moveToBack() async {

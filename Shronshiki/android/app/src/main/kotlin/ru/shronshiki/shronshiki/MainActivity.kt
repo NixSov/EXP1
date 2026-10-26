@@ -8,6 +8,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
+import android.view.KeyEvent
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -20,6 +21,7 @@ class MainActivity : FlutterActivity() {
         val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "shronshiki/call")
         this.channel = channel
         CallService.listener = { action -> channel.invokeMethod("onAction", action) }
+        MediaButtons.onButton = { key -> channel.invokeMethod("onMediaKey", key) }
 
         channel.setMethodCallHandler { call, result ->
             when (call.method) {
@@ -41,6 +43,14 @@ class MainActivity : FlutterActivity() {
                     ) {
                         requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
                     }
+                    result.success(null)
+                }
+                "startButtonTest" -> {
+                    MediaButtons.start(this)
+                    result.success(null)
+                }
+                "stopButtonTest" -> {
+                    MediaButtons.stop()
                     result.success(null)
                 }
                 "moveToBack" -> {
@@ -72,12 +82,17 @@ class MainActivity : FlutterActivity() {
         }
     }
 
+    /** Когда приложение на экране, нажатие на наушниках приходит сюда раньше. */
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+        MediaButtons.handleKey(event) || super.dispatchKeyEvent(event)
+
     override fun onDestroy() {
         if (CallService.listener != null && isFinishing) {
             // Экран приложения закрыт окончательно — звонка больше нет.
             stopService(Intent(this, CallService::class.java))
         }
         CallService.listener = null
+        MediaButtons.onButton = null
         channel?.setMethodCallHandler(null)
         super.onDestroy()
     }

@@ -8,16 +8,12 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.media.session.MediaSession
-import android.media.session.PlaybackState
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
-import android.os.SystemClock
-import android.view.KeyEvent
 
 /**
  * Foreground service на время звонка.
@@ -25,7 +21,7 @@ import android.view.KeyEvent
  * - Держит процесс и доступ к микрофону, когда приложение свёрнуто или экран выключен
  *   (тип microphone; стартует, пока приложение на экране).
  * - Уведомление с кнопками «Микрофон» и «Отключиться».
- * - MediaSession: нажатие на кнопку наушников (play/pause) включает и выключает микрофон.
+ * - Кнопка наушников (play/pause) включает и выключает микрофон — см. [MediaButtons].
  *
  * Свой сервис вместо плагина: плагин запускал второй движок Flutter, и его копия
  * WebRTC перехватывала управление звуком — микрофон глох, звук уходил в динамик.
@@ -63,12 +59,11 @@ class CallService : Service() {
     }
 
     private val mainHandler = Handler(Looper.getMainLooper())
-    private var mediaSession: MediaSession? = null
+    private var listeningButtons = false
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
     private var title = "Shronshiki"
     private var muted = false
-    private var lastButtonAt = 0L
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -78,7 +73,10 @@ class CallService : Service() {
                 intent.getStringExtra(EXTRA_TITLE)?.let { title = it }
                 if (intent.hasExtra(EXTRA_MUTED)) muted = intent.getBooleanExtra(EXTRA_MUTED, false)
                 showNotification()
-                if (mediaSession == null) startMediaSession()
+                if (!listeningButtons) {
+                    MediaButtons.start(this)
+                    listeningButtons = true
+                }
                 acquireLocks()
             }
             ACTION_HANGUP -> notifyFlutter("hangup")
@@ -166,48 +164,6 @@ class CallService : Service() {
         }
     }
 
-    /** Кнопка на наушниках (одно нажатие = play/pause) переключает микрофон. */
-    private fun startMediaSession() {
-        val session = MediaSession(this, "ShronshikiCall")
-        session.setCallback(object : MediaSession.Callback() {
-            override fun onMediaButtonEvent(mediaButtonIntent: Intent): Boolean {
-                @Suppress("DEPRECATION")
-                val event = mediaButtonIntent.getParcelableExtra<KeyEvent>(Intent.EXTRA_KEY_EVENT)
-                    ?: return super.onMediaButtonEvent(mediaButtonIntent)
-                when (event.keyCode) {
-                    KeyEvent.KEYCODE_HEADSETHOOK,
-                    KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE,
-                    KeyEvent.KEYCODE_MEDIA_PLAY,
-                    KeyEvent.KEYCODE_MEDIA_PAUSE -> {
-                        if (event.action == KeyEvent.ACTION_UP) onHeadsetButton()
-                        return true
-                    }
-                }
-                return super.onMediaButtonEvent(mediaButtonIntent)
-            }
-
-            // Некоторые гарнитуры присылают сразу команды play/pause.
-            override fun onPlay() = onHeadsetButton()
-            override fun onPause() = onHeadsetButton()
-        })
-        session.setPlaybackState(
-            PlaybackState.Builder()
-                .setActions(PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_PLAY_PAUSE)
-                .setState(PlaybackState.STATE_PLAYING, 0, 1f)
-                .build(),
-        )
-        session.isActive = true
-        mediaSession = session
-    }
-
-    private fun onHeadsetButton() {
-        // Одно нажатие может прийти и как key event, и как onPlay/onPause.
-        val now = SystemClock.elapsedRealtime()
-        if (now - lastButtonAt < 400) return
-        lastButtonAt = now
-        notifyFlutter("toggleMute")
-    }
-
     override fun onTaskRemoved(rootIntent: Intent?) {
         // Приложение смахнули из недавних — звонок завершается вместе с ним.
         stopSelf()
@@ -218,11 +174,10 @@ class CallService : Service() {
         wakeLock = null
         wifiLock?.takeIf { it.isHeld }?.release()
         wifiLock = null
-        mediaSession?.run {
-            isActive = false
-            release()
+        if (listeningButtons) {
+            MediaButtons.stop()
+            listeningButtons = false
         }
-        mediaSession = null
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } else {

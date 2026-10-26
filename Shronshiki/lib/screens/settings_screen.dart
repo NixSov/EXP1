@@ -232,6 +232,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _testHeadsetButton() async {
+    final presses = ValueNotifier<List<String>>([]);
+    await BackgroundCall.startButtonTest((key) => presses.value = [...presses.value, key]);
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Кнопка наушников'),
+        content: ValueListenableBuilder<List<String>>(
+          valueListenable: presses,
+          builder: (context, list, _) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Подключите наушники и один раз нажмите кнопку, которой ставите '
+                  'музыку на паузу.'),
+              const SizedBox(height: 16),
+              if (list.isEmpty)
+                const Row(
+                  children: [
+                    SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                    SizedBox(width: 12),
+                    Text('Ждём нажатия…'),
+                  ],
+                )
+              else ...[
+                Text('✅ Нажатие получено (${list.length})',
+                    style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 4),
+                Text('Сигнал: ${list.last}', style: Theme.of(context).textTheme.bodySmall),
+                const SizedBox(height: 8),
+                const Text('Во время звонка это нажатие будет включать и выключать микрофон.'),
+              ],
+            ],
+          ),
+        ),
+        actions: [
+          FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Закрыть')),
+        ],
+      ),
+    );
+    await BackgroundCall.stopButtonTest();
+  }
+
   Future<void> _signOut() async {
     final navigator = Navigator.of(context);
     await CallSession.leave();
@@ -284,6 +328,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     'Если звонок обрывается при выключенном экране — отключите для приложения '
                     'оптимизацию батареи'),
                 onTap: BackgroundCall.requestIgnoreBatteryOptimizations,
+              ),
+            if (BackgroundCall.supported)
+              ListTile(
+                leading: const Icon(Icons.headset_mic_outlined),
+                title: const Text('Проверка кнопки наушников'),
+                subtitle: const Text('Во время звонка одно нажатие на наушниках включает и '
+                    'выключает микрофон'),
+                onTap: _testHeadsetButton,
               ),
             const Divider(),
             const _Header('Сервер'),
