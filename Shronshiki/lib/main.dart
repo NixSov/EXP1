@@ -22,19 +22,16 @@ class ShronshikiApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const seed = Color(0xFF5865F2);
-    return MaterialApp(
-      title: 'Shronshiki',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: seed),
-        useMaterial3: true,
+    final theme = AppState.instance.theme;
+    return ListenableBuilder(
+      listenable: theme,
+      builder: (context, _) => MaterialApp(
+        title: 'Shronshiki',
+        debugShowCheckedModeBanner: false,
+        theme: theme.themeData,
+        builder: (context, child) => theme.wrapBackground(child ?? const SizedBox.shrink()),
+        home: const RootScreen(),
       ),
-      darkTheme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark),
-        useMaterial3: true,
-      ),
-      home: const RootScreen(),
     );
   }
 }

@@ -205,6 +205,17 @@ class _RoomScreenState extends State<RoomScreen> {
     final output = _outputLook;
     return Column(
       children: [
+        if (_call.serverLost)
+          Container(
+            width: double.infinity,
+            color: scheme.errorContainer,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Text(
+              'Нет связи с сервером. Разговор продолжается напрямую, '
+              'но новые участники не подключатся, пока связь не вернётся.',
+              style: TextStyle(color: scheme.onErrorContainer),
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
           child: Row(

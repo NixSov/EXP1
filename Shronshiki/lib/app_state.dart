@@ -2,20 +2,23 @@ import 'dart:async';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config.dart';
 import 'services/rooms.dart';
 import 'services/settings.dart';
+import 'services/theme_settings.dart';
 
 /// Общие объекты приложения.
 class AppState {
-  AppState._(this.config, this.settings);
+  AppState._(this.config, this.settings, this.theme);
 
   static late AppState instance;
 
   AppConfig config;
   final AudioSettings settings;
+  final ThemeSettings theme;
 
   /// Код комнаты из ссылки shronshiki://join/КОД, ожидающий входа.
   final ValueNotifier<String?> pendingJoinCode = ValueNotifier(null);
@@ -26,7 +29,11 @@ class AppState {
   RoomsRepository get rooms => RoomsRepository(db);
 
   static Future<AppState> init() async {
-    final state = AppState._(await AppConfig.load(), await AudioSettings.load());
+    final state = AppState._(
+      await AppConfig.load(),
+      await AudioSettings.load(),
+      await ThemeSettings.load(),
+    );
     instance = state;
     if (state.config.isConfigured) await state.initSupabase();
     state._listenLinks();
@@ -42,6 +49,7 @@ class AppState {
       // По умолчанию Realtime отключается при сворачивании приложения — это оборвало бы
       // звонок в фоне. Сокет живёт, пока работает foreground service.
       realtimeLifecycleOptions: const RealtimeLifecycleOptions.manual(),
+      httpClient: _FreshConnectionClient(),
     );
     supabaseReady = true;
   }
@@ -57,6 +65,22 @@ class AppState {
       // Платформа без поддержки ссылок — вход только по коду.
     }
   }
+}
+
+/// HTTP-клиент без keep-alive: каждый запрос — новое соединение. Некоторые
+/// провайдеры обрывают долгие соединения с зарубежными серверами, а короткие
+/// пропускают (проверено «Проверкой связи» без VPN).
+class _FreshConnectionClient extends http.BaseClient {
+  final http.Client _inner = http.Client();
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) {
+    request.persistentConnection = false;
+    return _inner.send(request);
+  }
+
+  @override
+  void close() => _inner.close();
 }
 
 extension UserDisplayName on User {

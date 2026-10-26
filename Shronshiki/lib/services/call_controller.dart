@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../config.dart';
 import 'rooms.dart';
 import 'settings.dart';
+import 'signaling.dart';
 
 enum CallStatus { connecting, inRoom, full, failed, ended }
 
@@ -56,8 +57,9 @@ class _Peer {
   Timer? restartTimer;
 }
 
-/// Голосовой звонок в комнате: mesh из P2P-соединений, сигналинг через
-/// Supabase Realtime (broadcast — offer/answer/ICE, presence — список участников).
+/// Голосовой звонок в комнате: mesh из P2P-соединений. Сигналинг и список
+/// участников — через короткие запросы к базе ([RoomSignaling]), потому что
+/// WebSocket к Supabase у части российских провайдеров не работает.
 class CallController extends ChangeNotifier {
   CallController({
     required this.room,
@@ -90,17 +92,25 @@ class CallController extends ChangeNotifier {
 
   final Map<String, Participant> _participants = {};
   final Map<String, _Peer> _peers = {};
-  RealtimeChannel? _channel;
+  RoomSignaling? _signaling;
   MediaStream? _localStream;
   Timer? _statsTimer;
-  Timer? _presenceTimeout;
-  Timer? _connectTimeout;
-  Object? _lastChannelError;
+  Timer? _pollTimer;
+  DateTime? _connectStarted;
+  DateTime? _lastServerContact;
+  Object? _lastServerError;
+  bool _pollInFlight = false;
+  bool _pollAgain = false;
 
-  /// Сколько ждём подключения к комнате. Realtime сам повторяет попытки,
-  /// поэтому на медленном мобильном интернете не сдаёмся после первой.
+  /// Сколько пытаемся войти в комнату, прежде чем показать ошибку.
   static const _connectLimit = Duration(seconds: 30);
-  bool _tracked = false;
+
+  /// Как часто опрашиваем сервер: чаще, пока соединения устанавливаются.
+  static const _fastPoll = Duration(milliseconds: 1000);
+  static const _slowPoll = Duration(milliseconds: 2000);
+
+  /// Нет ответа от сервера дольше этого — показываем предупреждение.
+  static const _serverLostAfter = Duration(seconds: 8);
   bool _disposed = false;
   bool _reconnecting = false;
   int? _joinedAtValue;
@@ -136,6 +146,12 @@ class CallController extends ChangeNotifier {
   /// Звонок идёт или подключается.
   bool get isActive => status == CallStatus.connecting || status == CallStatus.inRoom;
 
+  /// Сервер давно не отвечает. Звук при этом идёт напрямую и может продолжаться.
+  bool get serverLost =>
+      status == CallStatus.inRoom &&
+      _lastServerContact != null &&
+      DateTime.now().difference(_lastServerContact!) > _serverLostAfter;
+
   // ---------------------------------------------------------------------------
   // Вход и выход
   // ---------------------------------------------------------------------------
@@ -169,121 +185,87 @@ class CallController extends ChangeNotifier {
       isLocal: true,
     )..muted = muted;
 
-    final channel = _db.channel(
-      'room:${room.id}',
-      opts: RealtimeChannelConfig(key: peerId, private: true),
-    );
-    _channel = channel;
-    _lastChannelError = null;
-
-    _connectTimeout = Timer(_connectLimit, () {
-      if (status == CallStatus.connecting && !_tracked) {
-        _fail('Не удалось подключиться к комнате за ${_connectLimit.inSeconds} секунд. '
-            'Проверьте интернет или включите VPN.'
-            '${_lastChannelError != null ? '\n($_lastChannelError)' : ''}');
-      }
-    });
-
-    channel
-        .onBroadcast(event: 'signal', callback: _onSignal)
-        .onPresenceSync((_) => _onPresenceSync())
-        .subscribe((state, error) {
-      if (_disposed) return;
-      switch (state) {
-        case RealtimeSubscribeStatus.subscribed:
-          if (_tracked) {
-            // Переподключились к Realtime — заново сообщаем о себе.
-            unawaited(_track());
-          } else {
-            // Ждём текущий список участников, чтобы проверить, есть ли место.
-            _presenceTimeout?.cancel();
-            _presenceTimeout = Timer(const Duration(seconds: 3), _admitIfRoom);
-          }
-        case RealtimeSubscribeStatus.channelError:
-        case RealtimeSubscribeStatus.timedOut:
-          // Realtime повторит попытку сам; окончательно сдаёмся по _connectTimeout.
-          _lastChannelError = error ?? state.name;
-          debugPrint('realtime $state: $error');
-        case RealtimeSubscribeStatus.closed:
-          break;
-      }
-    });
+    // При «Обновить» оставляем тот же объект: он помнит, какие сообщения уже получены.
+    _signaling ??= RoomSignaling(_db, roomId: room.id, peerId: peerId);
+    _connectStarted = DateTime.now();
+    _lastServerError = null;
     notifyListeners();
+    _schedulePoll(Duration.zero);
   }
 
-  Map<String, dynamic> get _presencePayload => {
-        'peer_id': peerId,
-        'name': displayName,
-        'muted': muted,
-        'joined_at': _joinedAt,
-      };
+  void _schedulePoll(Duration delay) {
+    _pollTimer?.cancel();
+    if (_disposed || !isActive) return;
+    _pollTimer = Timer(delay, _poll);
+  }
 
-  Future<void> _track() async {
+  /// Один цикл опроса: отмечаемся в комнате, получаем участников и сообщения.
+  Future<void> _poll() async {
+    final signaling = _signaling;
+    if (signaling == null || _disposed || !isActive) return;
+    if (_pollInFlight) {
+      _pollAgain = true;
+      return;
+    }
+    _pollInFlight = true;
+    final wasLost = serverLost;
     try {
-      await _channel?.track(_presencePayload);
-    } catch (e) {
-      debugPrint('presence track failed: $e');
-    }
-  }
-
-  /// Перед входом проверяем, что в комнате меньше [Room.maxParticipants] человек.
-  void _admitIfRoom() {
-    _presenceTimeout?.cancel();
-    if (_tracked || _disposed || status != CallStatus.connecting) return;
-    final others = _remotePresences().length;
-    if (others >= room.maxParticipants) {
-      _setFull();
-      return;
-    }
-    _tracked = true;
-    _connectTimeout?.cancel();
-    unawaited(_track());
-  }
-
-  /// Текущие участники из presence (кроме меня): peerId -> payload.
-  Map<String, Map<String, dynamic>> _remotePresences() {
-    final result = <String, Map<String, dynamic>>{};
-    final channel = _channel;
-    if (channel == null) return result;
-    for (final state in channel.presenceState()) {
-      if (state.key == peerId || state.presences.isEmpty) continue;
-      result[state.key] = state.presences.last.payload;
-    }
-    return result;
-  }
-
-  void _onPresenceSync() {
-    final channel = _channel;
-    if (_disposed || channel == null) return;
-    if (status != CallStatus.connecting && status != CallStatus.inRoom) return;
-    if (!_tracked) {
-      _admitIfRoom();
-      return;
-    }
-
-    final remotes = _remotePresences();
-    final selfPresent = channel.presenceState().any((s) => s.key == peerId);
-
-    // Двое вошли одновременно в почти полную комнату — лишний (вошедший позже) выходит.
-    if (selfPresent && status == CallStatus.connecting) {
-      final ordered = [
-        (peerId, _joinedAt),
-        for (final e in remotes.entries) (e.key, (e.value['joined_at'] as num?)?.toInt() ?? 0),
-      ]..sort((a, b) {
-          final t = a.$2.compareTo(b.$2);
-          return t != 0 ? t : a.$1.compareTo(b.$1);
-        });
-      final position = ordered.indexWhere((e) => e.$1 == peerId);
-      if (position >= room.maxParticipants) {
-        _setFull();
+      final result = await signaling.poll(name: displayName, muted: muted, joinedAt: _joinedAt);
+      if (_disposed || signaling != _signaling || !isActive) return;
+      _lastServerContact = DateTime.now();
+      if (result.full) {
+        if (status == CallStatus.connecting) {
+          _setFull();
+        } else {
+          // Пока нас не было (сеть пропала), место заняли — выходим.
+          _fail('Связь с комнатой пропала, а ваше место занял другой участник.');
+        }
         return;
       }
-      status = CallStatus.inRoom;
-      _admittedAt = DateTime.now();
-      _startStats();
+      if (status == CallStatus.connecting) {
+        status = CallStatus.inRoom;
+        _admittedAt ??= DateTime.now();
+        _startStats();
+      }
+      _applyPeers(result.peers);
+      // Строго по порядку: offer раньше своих ICE-кандидатов.
+      for (final signal in result.signals) {
+        await _onSignal(signal.from, signal.payload);
+      }
+      notifyListeners();
+    } catch (e) {
+      _lastServerError = e;
+      debugPrint('poll failed: $e');
+      if (status == CallStatus.connecting &&
+          DateTime.now().difference(_connectStarted!) > _connectLimit) {
+        _fail('Не удалось подключиться к комнате за ${_connectLimit.inSeconds} секунд. '
+            'Проверьте интернет.\n(${_shortError(_lastServerError)})');
+        return;
+      }
+      if (serverLost != wasLost) notifyListeners();
+    } finally {
+      _pollInFlight = false;
     }
+    if (_pollAgain) {
+      _pollAgain = false;
+      _schedulePoll(Duration.zero);
+    } else {
+      final settling = _participants.values.any((p) => !p.connected);
+      _schedulePoll(settling || status == CallStatus.connecting ? _fastPoll : _slowPoll);
+    }
+  }
 
-    // Обновляем список участников.
+  static String _shortError(Object? e) {
+    final text = '$e';
+    return text.length > 120 ? '${text.substring(0, 120)}…' : text;
+  }
+
+  /// Обновляет список участников по ответу сервера и заводит недостающие соединения.
+  void _applyPeers(List<Map<String, dynamic>> peers) {
+    final remotes = {
+      for (final p in peers)
+        if (p['peer_id'] != peerId) p['peer_id'] as String: p,
+    };
     for (final entry in remotes.entries) {
       final p = entry.value;
       final participant = _participants.putIfAbsent(
@@ -303,21 +285,17 @@ class CallController extends ChangeNotifier {
         .where((id) => id != peerId && !remotes.containsKey(id))
         .toList();
     for (final id in gone) {
-      // Сервер мог потерять участника из-за плохой связи с ним (или с нами),
-      // а прямое соединение при этом живо — тогда звонок не обрываем.
+      // Сервер мог потерять участника из-за плохой связи с ним, а прямое
+      // соединение при этом живо — тогда звонок не обрываем.
       if (_participants[id]!.connected && _peers.containsKey(id)) continue;
       _removeParticipant(id);
     }
-
-    // Соединения: offer отправляет участник с меньшим peerId, второй ждёт.
-    if (status == CallStatus.inRoom) {
-      for (final id in remotes.keys) {
-        if (!_peers.containsKey(id) && peerId.compareTo(id) < 0) {
-          unawaited(_callPeer(id));
-        }
+    // Offer отправляет участник с меньшим peerId, второй ждёт.
+    for (final id in remotes.keys) {
+      if (!_peers.containsKey(id) && peerId.compareTo(id) < 0) {
+        unawaited(_callPeer(id));
       }
     }
-    notifyListeners();
   }
 
   void _removeParticipant(String id) {
@@ -333,33 +311,20 @@ class CallController extends ChangeNotifier {
     try {
       status = CallStatus.connecting;
       errorMessage = null;
-      _tracked = false;
       _statsTimer?.cancel();
-      _presenceTimeout?.cancel();
-      _connectTimeout?.cancel();
+      _pollTimer?.cancel();
       for (final id in _peers.keys.toList()) {
+        _sendSignal(id, 'bye', const {});
         _closePeer(id);
       }
       _participants.removeWhere((id, _) => id != peerId);
       notifyListeners();
-      await _leaveChannel();
+      await _signaling?.flush();
       if (_disposed) return;
       await start();
     } finally {
       _reconnecting = false;
     }
-  }
-
-  Future<void> _leaveChannel() async {
-    final channel = _channel;
-    _channel = null;
-    if (channel == null) return;
-    try {
-      await channel.untrack();
-    } catch (_) {}
-    try {
-      await _db.removeChannel(channel);
-    } catch (_) {}
   }
 
   void _setFull() {
@@ -378,17 +343,8 @@ class CallController extends ChangeNotifier {
   Future<void> hangUp() async {
     if (status == CallStatus.ended) return;
     // Сообщаем остальным сразу, не дожидаясь, пока сервер заметит уход.
-    final channel = _channel;
-    if (channel != null && _peers.isNotEmpty) {
-      try {
-        await Future.wait([
-          for (final id in _peers.keys)
-            channel.sendBroadcastMessage(
-              event: 'signal',
-              payload: {'from': peerId, 'to': id, 'kind': 'bye'},
-            ),
-        ]).timeout(const Duration(milliseconds: 1500));
-      } catch (_) {}
+    for (final id in _peers.keys) {
+      _sendSignal(id, 'bye', const {});
     }
     status = CallStatus.ended;
     notifyListeners();
@@ -397,13 +353,14 @@ class CallController extends ChangeNotifier {
 
   Future<void> _teardown() async {
     _statsTimer?.cancel();
-    _presenceTimeout?.cancel();
-    _connectTimeout?.cancel();
+    _pollTimer?.cancel();
     navigator.mediaDevices.ondevicechange = null;
     for (final id in _peers.keys.toList()) {
       _closePeer(id);
     }
-    await _leaveChannel();
+    final signaling = _signaling;
+    _signaling = null;
+    await signaling?.leave();
     final stream = _localStream;
     _localStream = null;
     if (stream != null) {
@@ -442,7 +399,7 @@ class CallController extends ChangeNotifier {
 
     pc.onIceCandidate = (candidate) {
       if (candidate.candidate == null) return;
-      _send(remoteId, 'ice', {
+      _sendSignal(remoteId, 'ice', {
         'candidate': candidate.candidate,
         'sdpMid': candidate.sdpMid,
         'sdpMLineIndex': candidate.sdpMLineIndex,
@@ -483,7 +440,7 @@ class CallController extends ChangeNotifier {
         if (iceRestart) 'iceRestart': true,
       });
       await peer.pc.setLocalDescription(offer);
-      _send(remoteId, 'offer', {'sdp': offer.sdp, 'sdpType': offer.type});
+      _sendSignal(remoteId, 'offer', {'sdp': offer.sdp, 'sdpType': offer.type});
     } catch (e) {
       debugPrint('offer to $remoteId failed: $e');
     }
@@ -510,30 +467,12 @@ class CallController extends ChangeNotifier {
     unawaited(peer.pc.close().catchError((_) {}));
   }
 
-  // Поля type и event занимает сам Realtime (type = 'broadcast'), поэтому вид
-  // сообщения передаём в kind, а тип SDP — в sdpType.
-  void _send(String to, String kind, Map<String, dynamic> data) {
-    final channel = _channel;
-    if (channel == null) return;
-    unawaited(channel.sendBroadcastMessage(
-      event: 'signal',
-      payload: {'from': peerId, 'to': to, 'kind': kind, ...data},
-    ).catchError((e) {
-      debugPrint('signal send failed: $e');
-      return ChannelResponse.error;
-    }));
+  void _sendSignal(String to, String kind, Map<String, dynamic> data) {
+    _signaling?.send(to, {'kind': kind, ...data});
   }
 
-  Future<void> _onSignal(Map<String, dynamic> message) async {
-    // Realtime кладёт полезную нагрузку в поле payload.
-    final data = (message['payload'] is Map)
-        ? Map<String, dynamic>.from(message['payload'] as Map)
-        : message;
-    if (data['to'] != peerId || _disposed) return;
-    if (status != CallStatus.inRoom && status != CallStatus.connecting) return;
-    final from = data['from'] as String?;
-    if (from == null) return;
-
+  Future<void> _onSignal(String from, Map<String, dynamic> data) async {
+    if (_disposed || !isActive) return;
     try {
       switch (data['kind']) {
         case 'offer':
@@ -548,7 +487,7 @@ class CallController extends ChangeNotifier {
           await _flushCandidates(peer);
           final answer = await peer.pc.createAnswer({});
           await peer.pc.setLocalDescription(answer);
-          _send(from, 'answer', {'sdp': answer.sdp, 'sdpType': answer.type});
+          _sendSignal(from, 'answer', {'sdp': answer.sdp, 'sdpType': answer.type});
         case 'answer':
           final peer = _peers[from];
           if (peer == null) return;
@@ -602,7 +541,8 @@ class CallController extends ChangeNotifier {
       if (muted) me.speaking = false;
     }
     notifyListeners();
-    if (_tracked) await _track();
+    // Сразу сообщаем серверу, чтобы остальные быстрее увидели значок.
+    if (status == CallStatus.inRoom) _schedulePoll(Duration.zero);
   }
 
   /// Кнопка динамика: динамик ↔ наушники (или трубка, если наушников нет).

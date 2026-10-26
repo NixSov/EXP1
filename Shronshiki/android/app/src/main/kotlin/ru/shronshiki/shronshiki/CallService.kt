@@ -10,10 +10,12 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.PowerManager
 import android.os.SystemClock
 import android.view.KeyEvent
 
@@ -62,6 +64,8 @@ class CallService : Service() {
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private var mediaSession: MediaSession? = null
+    private var wakeLock: PowerManager.WakeLock? = null
+    private var wifiLock: WifiManager.WifiLock? = null
     private var title = "Shronshiki"
     private var muted = false
     private var lastButtonAt = 0L
@@ -75,11 +79,39 @@ class CallService : Service() {
                 if (intent.hasExtra(EXTRA_MUTED)) muted = intent.getBooleanExtra(EXTRA_MUTED, false)
                 showNotification()
                 if (mediaSession == null) startMediaSession()
+                acquireLocks()
             }
             ACTION_HANGUP -> notifyFlutter("hangup")
             ACTION_TOGGLE_MUTE -> notifyFlutter("toggleMute")
         }
         return START_NOT_STICKY
+    }
+
+    /**
+     * При выключенном экране процессор и Wi-Fi могут засыпать — тогда приложение
+     * перестаёт опрашивать сервер. На время звонка не даём им уснуть.
+     */
+    @Suppress("DEPRECATION")
+    private fun acquireLocks() {
+        if (wakeLock == null) {
+            val pm = getSystemService(POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "Shronshiki:call").apply {
+                setReferenceCounted(false)
+                acquire(6 * 60 * 60 * 1000L)
+            }
+        }
+        if (wifiLock == null) {
+            val wm = applicationContext.getSystemService(WIFI_SERVICE) as WifiManager
+            val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+            } else {
+                WifiManager.WIFI_MODE_FULL_HIGH_PERF
+            }
+            wifiLock = wm.createWifiLock(mode, "Shronshiki:call").apply {
+                setReferenceCounted(false)
+                acquire()
+            }
+        }
     }
 
     private fun notifyFlutter(action: String) {
@@ -182,6 +214,10 @@ class CallService : Service() {
     }
 
     override fun onDestroy() {
+        wakeLock?.takeIf { it.isHeld }?.release()
+        wakeLock = null
+        wifiLock?.takeIf { it.isHeld }?.release()
+        wifiLock = null
         mediaSession?.run {
             isActive = false
             release()

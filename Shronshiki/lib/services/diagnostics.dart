@@ -1,9 +1,6 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../app_state.dart';
 
@@ -19,8 +16,7 @@ class DiagResult {
 }
 
 /// Проверка связи с Supabase из текущей сети: короткий запрос, база данных
-/// и долгое Realtime-соединение с большим объёмом данных (провайдеры иногда
-/// режут соединения с зарубежными облаками после первых ~16 КБ).
+/// и серия запросов, как во время звонка.
 class Diagnostics {
   static Future<List<DiagResult>> run(void Function(List<DiagResult>) onProgress) async {
     final results = <DiagResult>[];
@@ -31,7 +27,7 @@ class Diagnostics {
 
     add(await _health());
     add(await _database());
-    add(await _realtime());
+    add(await _series());
     return results;
   }
 
@@ -65,50 +61,29 @@ class Diagnostics {
     }
   }
 
-  static Future<DiagResult> _realtime() async {
-    const title = 'Realtime (связь в комнате)';
-    const messages = 40;
-    final db = AppState.instance.db;
-    final channel = db.channel(
-      'diag:${Random().nextInt(1 << 32)}',
-      opts: const RealtimeChannelConfig(self: true),
-    );
-    var received = 0;
-    final subscribed = Completer<String?>();
-    channel.onBroadcast(event: 'diag', callback: (_) => received++).subscribe((state, error) {
-      if (subscribed.isCompleted) return;
-      if (state == RealtimeSubscribeStatus.subscribed) subscribed.complete(null);
-      if (state == RealtimeSubscribeStatus.channelError || state == RealtimeSubscribeStatus.timedOut) {
-        subscribed.complete('${state.name} ${error ?? ''}'.trim());
+  /// Так приложение общается с сервером во время звонка: короткие запросы подряд.
+  static Future<DiagResult> _series() async {
+    const title = 'Серия запросов (как во время звонка)';
+    const count = 20;
+    var ok = 0;
+    var totalMs = 0;
+    Object? lastError;
+    for (var i = 0; i < count; i++) {
+      final sw = Stopwatch()..start();
+      try {
+        await AppState.instance.rooms.findByCode('AAAAAA');
+        ok++;
+        totalMs += sw.elapsedMilliseconds;
+      } catch (e) {
+        lastError = e;
       }
-    });
-    final sw = Stopwatch()..start();
-    try {
-      final error = await subscribed.future.timeout(const Duration(seconds: 20));
-      if (error != null) return DiagResult(title, ok: false, detail: 'не подключилось: $error');
-      final connectMs = sw.elapsedMilliseconds;
-      // ~40 КБ: если провайдер обрывает соединение после 16 КБ, часть сообщений не вернётся.
-      final filler = base64.encode(List.filled(750, 7));
-      for (var i = 0; i < messages; i++) {
-        await channel.sendBroadcastMessage(event: 'diag', payload: {'i': i, 'data': filler});
-        await Future<void>.delayed(const Duration(milliseconds: 50));
-      }
-      final deadline = DateTime.now().add(const Duration(seconds: 10));
-      while (received < messages && DateTime.now().isBefore(deadline)) {
-        await Future<void>.delayed(const Duration(milliseconds: 200));
-      }
-      final ok = received >= messages;
-      return DiagResult(title,
-          ok: ok,
-          detail: 'подключение $connectMs мс, вернулось $received из $messages сообщений (~40 КБ)'
-              '${ok ? '' : ' — соединение режется'}');
-    } on TimeoutException {
-      return DiagResult(title, ok: false, detail: 'нет ответа 20 секунд');
-    } catch (e) {
-      return DiagResult(title, ok: false, detail: _short(e));
-    } finally {
-      await db.removeChannel(channel);
+      await Future<void>.delayed(const Duration(milliseconds: 300));
     }
+    final avg = ok == 0 ? 0 : totalMs ~/ ok;
+    return DiagResult(title,
+        ok: ok == count,
+        detail: 'успешно $ok из $count, в среднем $avg мс'
+            '${lastError != null ? '\nпоследняя ошибка: ${_short(lastError)}' : ''}');
   }
 
   static String _short(Object e) {
