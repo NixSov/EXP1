@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart' show RTCPeerConnectionState;
 
 import '../app_state.dart';
 import '../services/background_call.dart';
@@ -268,7 +269,13 @@ class _ParticipantTile extends StatelessWidget {
               ],
             ),
             if (!p.connected)
-              Text('подключение…', style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                p.connection == RTCPeerConnectionState.RTCPeerConnectionStateFailed
+                    ? 'нет связи, нажмите «Обновить»'
+                    : 'подключение…',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
           ],
         ),
       ),

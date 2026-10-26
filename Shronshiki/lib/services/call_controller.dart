@@ -433,7 +433,7 @@ class CallController extends ChangeNotifier {
         if (iceRestart) 'iceRestart': true,
       });
       await peer.pc.setLocalDescription(offer);
-      _send(remoteId, 'offer', {'sdp': offer.sdp, 'type': offer.type});
+      _send(remoteId, 'offer', {'sdp': offer.sdp, 'sdpType': offer.type});
     } catch (e) {
       debugPrint('offer to $remoteId failed: $e');
     }
@@ -460,12 +460,14 @@ class CallController extends ChangeNotifier {
     unawaited(peer.pc.close().catchError((_) {}));
   }
 
-  void _send(String to, String type, Map<String, dynamic> data) {
+  // Поля type и event занимает сам Realtime (type = 'broadcast'), поэтому вид
+  // сообщения передаём в kind, а тип SDP — в sdpType.
+  void _send(String to, String kind, Map<String, dynamic> data) {
     final channel = _channel;
     if (channel == null) return;
     unawaited(channel.sendBroadcastMessage(
       event: 'signal',
-      payload: {'from': peerId, 'to': to, 'type': type, ...data},
+      payload: {'from': peerId, 'to': to, 'kind': kind, ...data},
     ).catchError((e) {
       debugPrint('signal send failed: $e');
       return ChannelResponse.error;
@@ -483,7 +485,7 @@ class CallController extends ChangeNotifier {
     if (from == null) return;
 
     try {
-      switch (data['type']) {
+      switch (data['kind']) {
         case 'offer':
           var peer = _peers[from];
           if (peer == null || peer.initiator) {
@@ -491,17 +493,17 @@ class CallController extends ChangeNotifier {
             peer = await _createPeer(from, initiator: false);
           }
           await peer.pc.setRemoteDescription(
-              RTCSessionDescription(data['sdp'] as String?, data['type'] as String?));
+              RTCSessionDescription(data['sdp'] as String?, data['sdpType'] as String?));
           peer.remoteDescriptionSet = true;
           await _flushCandidates(peer);
           final answer = await peer.pc.createAnswer({});
           await peer.pc.setLocalDescription(answer);
-          _send(from, 'answer', {'sdp': answer.sdp, 'type': answer.type});
+          _send(from, 'answer', {'sdp': answer.sdp, 'sdpType': answer.type});
         case 'answer':
           final peer = _peers[from];
           if (peer == null) return;
           await peer.pc.setRemoteDescription(
-              RTCSessionDescription(data['sdp'] as String?, data['type'] as String?));
+              RTCSessionDescription(data['sdp'] as String?, data['sdpType'] as String?));
           peer.remoteDescriptionSet = true;
           await _flushCandidates(peer);
         case 'ice':
@@ -519,7 +521,7 @@ class CallController extends ChangeNotifier {
           }
       }
     } catch (e) {
-      debugPrint('signal ${data['type']} from $from failed: $e');
+      debugPrint('signal ${data['kind']} from $from failed: $e');
     }
   }
 
