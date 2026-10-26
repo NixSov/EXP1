@@ -2,103 +2,89 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' show RTCPeerConnectionState;
 
-import '../app_state.dart';
-import '../services/background_call.dart';
 import '../services/call_controller.dart';
-import '../services/rooms.dart';
+import '../services/call_session.dart';
 import 'errors.dart';
+import 'settings_screen.dart';
 
-/// Голосовая комната.
+/// Голосовая комната. Экран только показывает звонок из [CallSession]:
+/// уйти с него назад или в настройки можно, не выходя из комнаты.
 class RoomScreen extends StatefulWidget {
-  const RoomScreen({super.key, required this.room, required this.displayName});
+  const RoomScreen({super.key, required this.call});
 
-  final Room room;
-  final String displayName;
+  final CallController call;
 
   @override
   State<RoomScreen> createState() => _RoomScreenState();
 }
 
 class _RoomScreenState extends State<RoomScreen> {
-  late final CallController _call;
-  CallStatus? _lastStatus;
+  CallController get _call => widget.call;
 
   @override
   void initState() {
     super.initState();
-    final app = AppState.instance;
-    _call = CallController(
-      room: widget.room,
-      displayName: widget.displayName,
-      config: app.config,
-      settings: app.settings,
-    )..addListener(_onCallChanged);
-    _start();
-  }
-
-  Future<void> _start() async {
-    // Доступ к микрофону flutter_webrtc запрашивает сам при getUserMedia.
-    await _call.start();
+    _call.addListener(_onCallChanged);
   }
 
   void _onCallChanged() {
-    final status = _call.status;
-    if (status != _lastStatus) {
-      _lastStatus = status;
-      if (status == CallStatus.inRoom) {
-        BackgroundCall.start(roomName: widget.room.name, onHangUp: _leave);
-      } else if (status != CallStatus.connecting) {
-        BackgroundCall.stop();
-      }
+    if (!mounted) return;
+    if (_call.status == CallStatus.ended) {
+      // Вышли (в том числе кнопкой в уведомлении) — возвращаемся к списку комнат.
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      return;
     }
-    if (mounted) setState(() {});
-  }
-
-  Future<void> _leave() async {
-    await _call.hangUp();
-    await BackgroundCall.stop();
-    if (mounted) Navigator.of(context).pop();
+    setState(() {});
   }
 
   @override
   void dispose() {
     _call.removeListener(_onCallChanged);
-    _call.dispose();
-    BackgroundCall.stop();
+    // Ошибка или «комната заполнена» — звонок больше не нужен.
+    CallSession.dismissIfFinished();
     super.dispose();
   }
 
   void _copyInvite() {
-    Clipboard.setData(ClipboardData(text: widget.room.inviteText));
+    Clipboard.setData(ClipboardData(text: _call.room.inviteText));
     showError(context, 'Приглашение скопировано');
+  }
+
+  void _openSettings() {
+    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SettingsScreen()));
   }
 
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: _call.status != CallStatus.inRoom,
-      onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) _leave();
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(widget.room.name, overflow: TextOverflow.ellipsis),
-              Text('Код: ${widget.room.code}', style: Theme.of(context).textTheme.bodySmall),
-            ],
-          ),
-          actions: [
-            IconButton(
-              tooltip: 'Пригласить',
-              icon: const Icon(Icons.person_add_alt_1_outlined),
-              onPressed: _copyInvite,
-            ),
+    final inCall = _call.isActive;
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(
+          tooltip: inCall ? 'К списку комнат (звонок продолжится)' : 'Назад',
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).maybePop(),
+        ),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_call.room.name, overflow: TextOverflow.ellipsis),
+            Text('Код: ${_call.room.code}', style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
-        body: SafeArea(child: _body(context)),
+        actions: [
+          IconButton(
+            tooltip: 'Пригласить',
+            icon: const Icon(Icons.person_add_alt_1_outlined),
+            onPressed: _copyInvite,
+          ),
+          IconButton(
+            tooltip: 'Настройки',
+            icon: const Icon(Icons.settings_outlined),
+            onPressed: _openSettings,
+          ),
+        ],
       ),
+      body: SafeArea(child: _body(context)),
     );
   }
 
@@ -114,7 +100,7 @@ class _RoomScreenState extends State<RoomScreen> {
         return _Message(
           icon: Icons.group_off_outlined,
           title: 'Комната заполнена',
-          text: 'В комнате уже ${widget.room.maxParticipants} участника — это максимум. '
+          text: 'В комнате уже ${_call.room.maxParticipants} участника — это максимум. '
               'Попробуйте позже.',
           action: _retryOrBack(context),
         );
@@ -146,9 +132,77 @@ class _RoomScreenState extends State<RoomScreen> {
         ],
       );
 
+  /// Список устройств (как в SaluteJazz — по стрелочке у кнопки).
+  Future<void> _pickDevice({required bool input}) async {
+    final title = input ? 'Микрофон' : 'Вывод звука';
+    await _call.refreshDevices();
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: ListenableBuilder(
+          listenable: _call,
+          builder: (context, _) {
+            final list = input ? _call.inputs : _call.outputs;
+            final current = input ? _call.inputId : _call.outputId;
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
+                  child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+                ),
+                if (list.isEmpty)
+                  const ListTile(title: Text('Нет доступных устройств')),
+                for (final d in list)
+                  ListTile(
+                    leading: Icon(_deviceIcon(d.icon)),
+                    title: Text(d.label),
+                    trailing: d.id == current ? const Icon(Icons.check) : null,
+                    selected: d.id == current,
+                    onTap: () {
+                      Navigator.pop(context);
+                      input ? _call.selectInput(d.id) : _call.selectOutput(d.id);
+                    },
+                  ),
+                const SizedBox(height: 8),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  static IconData _deviceIcon(String icon) => switch (icon) {
+        'speaker' => Icons.volume_up,
+        'earpiece' => Icons.phone_in_talk,
+        'headset' => Icons.headphones,
+        'bluetooth' => Icons.bluetooth_audio,
+        _ => Icons.mic,
+      };
+
+  ({IconData icon, String label}) get _outputLook {
+    final current = _call.outputs.where((d) => d.id == _call.outputId).firstOrNull;
+    return switch (current?.icon) {
+      'speaker' => (icon: Icons.volume_up, label: 'Динамик'),
+      'earpiece' => (icon: Icons.phone_in_talk, label: 'Телефон'),
+      'headset' => (icon: Icons.headphones, label: 'Наушники'),
+      'bluetooth' => (icon: Icons.bluetooth_audio, label: 'Bluetooth'),
+      _ => (icon: Icons.volume_up, label: 'Звук'),
+    };
+  }
+
+  void _pickInput() => _pickDevice(input: true);
+
+  void _pickOutput() => _pickDevice(input: false);
+
   Widget _inRoom(BuildContext context) {
     final participants = _call.participants;
     final scheme = Theme.of(context).colorScheme;
+    final output = _outputLook;
     return Column(
       children: [
         Padding(
@@ -156,7 +210,7 @@ class _RoomScreenState extends State<RoomScreen> {
           child: Row(
             children: [
               Text(
-                'Участники: ${participants.length} из ${widget.room.maxParticipants}',
+                'Участники: ${participants.length} из ${_call.room.maxParticipants}',
                 style: Theme.of(context).textTheme.titleSmall,
               ),
             ],
@@ -180,23 +234,25 @@ class _RoomScreenState extends State<RoomScreen> {
             ),
           ),
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20),
+          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _ControlButton(
                 icon: _call.muted ? Icons.mic_off : Icons.mic,
-                label: _call.muted ? 'Микрофон выкл.' : 'Микрофон',
+                label: _call.muted ? 'Микр. выкл.' : 'Микрофон',
                 active: !_call.muted,
                 onPressed: _call.toggleMute,
+                onMore: _pickInput,
               ),
-              if (_call.canSwitchSpeaker)
-                _ControlButton(
-                  icon: _call.speakerOn ? Icons.volume_up : Icons.headphones,
-                  label: _call.speakerOn ? 'Динамик' : 'Наушники',
-                  active: _call.speakerOn,
-                  onPressed: _call.toggleSpeaker,
-                ),
+              _ControlButton(
+                icon: output.icon,
+                label: output.label,
+                active: _call.speakerOn,
+                onPressed: _call.canSwitchSpeaker ? _call.toggleSpeaker : _pickOutput,
+                onMore: _pickOutput,
+              ),
               _ControlButton(
                 icon: Icons.sync,
                 label: 'Обновить',
@@ -209,7 +265,7 @@ class _RoomScreenState extends State<RoomScreen> {
                 active: true,
                 color: scheme.error,
                 foreground: scheme.onError,
-                onPressed: _leave,
+                onPressed: CallSession.leave,
               ),
             ],
           ),
@@ -289,6 +345,7 @@ class _ControlButton extends StatelessWidget {
     required this.label,
     required this.active,
     required this.onPressed,
+    this.onMore,
     this.color,
     this.foreground,
   });
@@ -297,24 +354,44 @@ class _ControlButton extends StatelessWidget {
   final String label;
   final bool active;
   final VoidCallback onPressed;
+
+  /// Стрелочка рядом с кнопкой — список устройств.
+  final VoidCallback? onMore;
   final Color? color;
   final Color? foreground;
 
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final bg = color ?? (active ? scheme.primary : scheme.surfaceContainerHighest);
+    final fg = foreground ?? (active ? scheme.onPrimary : scheme.onSurface);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        IconButton.filled(
-          iconSize: 30,
-          padding: const EdgeInsets.all(16),
-          style: IconButton.styleFrom(
-            backgroundColor: color ?? (active ? scheme.primary : scheme.surfaceContainerHighest),
-            foregroundColor: foreground ?? (active ? scheme.onPrimary : scheme.onSurface),
+        Material(
+          color: bg,
+          shape: const StadiumBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              InkWell(
+                onTap: onPressed,
+                child: Padding(
+                  padding: EdgeInsets.fromLTRB(16, 16, onMore == null ? 16 : 8, 16),
+                  child: Icon(icon, size: 28, color: fg),
+                ),
+              ),
+              if (onMore != null)
+                InkWell(
+                  onTap: onMore,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(0, 16, 10, 16),
+                    child: Icon(Icons.keyboard_arrow_up, size: 22, color: fg),
+                  ),
+                ),
+            ],
           ),
-          onPressed: onPressed,
-          icon: Icon(icon),
         ),
         const SizedBox(height: 6),
         Text(label, style: Theme.of(context).textTheme.bodySmall),

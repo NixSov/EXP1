@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_state.dart';
@@ -6,10 +7,12 @@ import 'screens/auth_screen.dart';
 import 'screens/home_screen.dart';
 import 'screens/setup_screen.dart';
 import 'services/background_call.dart';
+import 'services/call_session.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   BackgroundCall.init();
+  CallSession.init();
   await AppState.init();
   runApp(const ShronshikiApp());
 }
@@ -56,7 +59,19 @@ class _RootScreenState extends State<RootScreen> {
       builder: (context, _) {
         final user = app.db.auth.currentUser;
         if (user == null) return const AuthScreen();
-        return HomeScreen(key: ValueKey(user.id));
+        return PopScope(
+          canPop: false,
+          onPopInvokedWithResult: (didPop, _) {
+            if (didPop) return;
+            // Во время звонка «Назад» сворачивает приложение, а не завершает звонок.
+            if (CallSession.current.value?.isActive ?? false) {
+              BackgroundCall.moveToBack();
+            } else {
+              SystemNavigator.pop();
+            }
+          },
+          child: HomeScreen(key: ValueKey(user.id)),
+        );
       },
     );
   }

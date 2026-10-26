@@ -35,6 +35,17 @@ class Participant {
       isLocal || connection == RTCPeerConnectionState.RTCPeerConnectionStateConnected;
 }
 
+/// Устройство ввода или вывода звука.
+class AudioDevice {
+  const AudioDevice({required this.id, required this.label, required this.icon});
+
+  final String id;
+  final String label;
+
+  /// speaker, earpiece, headset, bluetooth, mic
+  final String icon;
+}
+
 class _Peer {
   _Peer(this.pc, this.initiator);
 
@@ -69,7 +80,13 @@ class CallController extends ChangeNotifier {
   CallStatus status = CallStatus.connecting;
   String? errorMessage;
   bool muted = false;
-  bool speakerOn = true;
+
+  List<AudioDevice> inputs = const [];
+  List<AudioDevice> outputs = const [];
+  String? inputId;
+  String? outputId;
+  bool _inputChosenByUser = false;
+  Set<String> _presentIds = {};
 
   final Map<String, Participant> _participants = {};
   final Map<String, _Peer> _peers = {};
@@ -110,7 +127,14 @@ class CallController extends ChangeNotifier {
 
   static bool get _isMobile => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
+  static bool get _isAndroid => !kIsWeb && Platform.isAndroid;
+
   bool get canSwitchSpeaker => _isMobile;
+
+  bool get speakerOn => outputId == 'speaker';
+
+  /// Звонок идёт или подключается.
+  bool get isActive => status == CallStatus.connecting || status == CallStatus.inRoom;
 
   // ---------------------------------------------------------------------------
   // Вход и выход
@@ -134,11 +158,9 @@ class CallController extends ChangeNotifier {
     }
 
     if (_joinedAtValue == null) {
-      speakerOn = settings.speakerByDefault;
       _joinedAtValue = DateTime.now().millisecondsSinceEpoch;
-    }
-    if (_isMobile) {
-      unawaited(Helper.setSpeakerphoneOn(speakerOn).catchError((_) {}));
+      navigator.mediaDevices.ondevicechange = (_) => unawaited(refreshDevices());
+      await refreshDevices(initial: true);
     }
     _participants[peerId] = Participant(
       peerId: peerId,
@@ -276,12 +298,15 @@ class CallController extends ChangeNotifier {
         ..name = (p['name'] as String?) ?? participant.name
         ..muted = p['muted'] == true;
     }
+    _presentIds = remotes.keys.toSet();
     final gone = _participants.keys
         .where((id) => id != peerId && !remotes.containsKey(id))
         .toList();
     for (final id in gone) {
-      _participants.remove(id);
-      _closePeer(id);
+      // Сервер мог потерять участника из-за плохой связи с ним (или с нами),
+      // а прямое соединение при этом живо — тогда звонок не обрываем.
+      if (_participants[id]!.connected && _peers.containsKey(id)) continue;
+      _removeParticipant(id);
     }
 
     // Соединения: offer отправляет участник с меньшим peerId, второй ждёт.
@@ -293,6 +318,11 @@ class CallController extends ChangeNotifier {
       }
     }
     notifyListeners();
+  }
+
+  void _removeParticipant(String id) {
+    _participants.remove(id);
+    _closePeer(id);
   }
 
   /// Кнопка «Обновить»: заново подключаемся к комнате и ко всем участникам.
@@ -347,6 +377,19 @@ class CallController extends ChangeNotifier {
 
   Future<void> hangUp() async {
     if (status == CallStatus.ended) return;
+    // Сообщаем остальным сразу, не дожидаясь, пока сервер заметит уход.
+    final channel = _channel;
+    if (channel != null && _peers.isNotEmpty) {
+      try {
+        await Future.wait([
+          for (final id in _peers.keys)
+            channel.sendBroadcastMessage(
+              event: 'signal',
+              payload: {'from': peerId, 'to': id, 'kind': 'bye'},
+            ),
+        ]).timeout(const Duration(milliseconds: 1500));
+      } catch (_) {}
+    }
     status = CallStatus.ended;
     notifyListeners();
     await _teardown();
@@ -356,6 +399,7 @@ class CallController extends ChangeNotifier {
     _statsTimer?.cancel();
     _presenceTimeout?.cancel();
     _connectTimeout?.cancel();
+    navigator.mediaDevices.ondevicechange = null;
     for (final id in _peers.keys.toList()) {
       _closePeer(id);
     }
@@ -411,8 +455,14 @@ class CallController extends ChangeNotifier {
         participant.connection = state;
         notifyListeners();
       }
-      if (state == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
-          state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected) {
+      final lost = state == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
+          state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
+          state == RTCPeerConnectionState.RTCPeerConnectionStateClosed;
+      if (lost && !_presentIds.contains(remoteId) && _peers[remoteId] == peer) {
+        // Участника уже нет в комнате, и связь с ним пропала — убираем.
+        _removeParticipant(remoteId);
+        notifyListeners();
+      } else if (lost && state != RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
         _scheduleIceRestart(remoteId);
       } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
         peer.restartTimer?.cancel();
@@ -506,6 +556,10 @@ class CallController extends ChangeNotifier {
               RTCSessionDescription(data['sdp'] as String?, data['sdpType'] as String?));
           peer.remoteDescriptionSet = true;
           await _flushCandidates(peer);
+        case 'bye':
+          _presentIds.remove(from);
+          _removeParticipant(from);
+          notifyListeners();
         case 'ice':
           final candidate = RTCIceCandidate(
             data['candidate'] as String?,
@@ -551,15 +605,133 @@ class CallController extends ChangeNotifier {
     if (_tracked) await _track();
   }
 
+  /// Кнопка динамика: динамик ↔ наушники (или трубка, если наушников нет).
   Future<void> toggleSpeaker() async {
     if (!canSwitchSpeaker) return;
-    speakerOn = !speakerOn;
+    final target = speakerOn ? _bestPrivateOutput() : 'speaker';
+    if (target != null) await selectOutput(target);
+  }
+
+  String? _bestPrivateOutput() {
+    for (final id in const ['bluetooth', 'wired-headset', 'earpiece']) {
+      if (outputs.any((d) => d.id == id)) return id;
+    }
+    return null;
+  }
+
+  Future<void> selectOutput(String id) async {
+    outputId = id;
+    if (!_inputChosenByUser) inputId = _inputFor(id) ?? inputId;
     notifyListeners();
     try {
-      await Helper.setSpeakerphoneOn(speakerOn);
+      await Helper.selectAudioOutput(id);
     } catch (e) {
-      debugPrint('speaker switch failed: $e');
+      debugPrint('select output failed: $e');
     }
+  }
+
+  Future<void> selectInput(String id) async {
+    inputId = id;
+    _inputChosenByUser = true;
+    notifyListeners();
+    try {
+      await Helper.selectAudioInput(id);
+    } catch (e) {
+      debugPrint('select input failed: $e');
+    }
+  }
+
+  /// Какой микрофон Android включит сам для выбранного выхода.
+  String? _inputFor(String outputId) {
+    if (!_isAndroid) return null;
+    if (outputId == 'bluetooth' && inputs.any((d) => d.id == 'bluetooth')) return 'bluetooth';
+    if (outputId == 'wired-headset' && inputs.any((d) => d.id == 'wired-headset')) {
+      return 'wired-headset';
+    }
+    return inputs.where((d) => d.icon == 'mic').firstOrNull?.id;
+  }
+
+  /// Обновляет списки устройств. Подключили наушники — переключаемся на них,
+  /// выбранное устройство пропало — выбираем лучшее из оставшихся.
+  Future<void> refreshDevices({bool initial = false}) async {
+    List<MediaDeviceInfo> all;
+    try {
+      all = await navigator.mediaDevices.enumerateDevices();
+    } catch (e) {
+      debugPrint('enumerateDevices failed: $e');
+      return;
+    }
+    if (_disposed) return;
+    final oldOutputIds = outputs.map((d) => d.id).toSet();
+
+    final builtinMics = all.where((d) => d.kind == 'audioinput' && d.deviceId.startsWith('microphone')).length;
+    inputs = [
+      for (final d in all.where((d) => d.kind == 'audioinput')) _describeInput(d, builtinMics),
+    ];
+    outputs = [
+      for (final d in all.where((d) => d.kind == 'audiooutput')) _describeOutput(d),
+    ];
+    final ids = outputs.map((d) => d.id).toSet();
+
+    if (_isAndroid) {
+      final newHeadset = ids.difference(oldOutputIds).where((id) => id == 'bluetooth' || id == 'wired-headset');
+      String? target;
+      if (initial) {
+        target = ids.contains('bluetooth')
+            ? 'bluetooth'
+            : ids.contains('wired-headset')
+                ? 'wired-headset'
+                : (settings.speakerByDefault || !ids.contains('earpiece') ? 'speaker' : 'earpiece');
+      } else if (newHeadset.isNotEmpty) {
+        target = newHeadset.first;
+      } else if (outputId != null && !ids.contains(outputId)) {
+        target = _bestPrivateOutput() ?? 'speaker';
+      }
+      if (target != null && ids.contains(target)) {
+        await selectOutput(target);
+        return;
+      }
+      if (inputId != null && !inputs.any((d) => d.id == inputId)) {
+        _inputChosenByUser = false;
+        inputId = _inputFor(outputId ?? 'speaker');
+      }
+    }
+    notifyListeners();
+  }
+
+  static AudioDevice _describeInput(MediaDeviceInfo d, int builtinMics) {
+    final id = d.deviceId;
+    if (!_isAndroid) return AudioDevice(id: id, label: d.label.isEmpty ? 'Микрофон' : d.label, icon: 'mic');
+    if (id == 'wired-headset') {
+      return AudioDevice(id: id, label: 'Микрофон проводной гарнитуры', icon: 'headset');
+    }
+    if (id == 'bluetooth') return AudioDevice(id: id, label: 'Bluetooth-гарнитура', icon: 'bluetooth');
+    var label = 'Микрофон телефона';
+    if (builtinMics > 1) {
+      final address = id.replaceFirst('microphone-', '').toLowerCase();
+      const names = {'bottom': 'нижний', 'back': 'задний', 'top': 'верхний', 'front': 'передний'};
+      final name = names.entries.where((e) => address.contains(e.key)).firstOrNull?.value;
+      label = name != null ? '$label ($name)' : '$label ($address)';
+    }
+    return AudioDevice(id: id, label: label, icon: 'mic');
+  }
+
+  static AudioDevice _describeOutput(MediaDeviceInfo d) {
+    final id = d.deviceId;
+    if (!_isAndroid) return AudioDevice(id: id, label: d.label.isEmpty ? 'Динамики' : d.label, icon: 'speaker');
+    return switch (id) {
+      'speaker' => AudioDevice(id: id, label: 'Динамик', icon: 'speaker'),
+      'earpiece' => AudioDevice(id: id, label: 'Телефон (у уха)', icon: 'earpiece'),
+      'wired-headset' => AudioDevice(id: id, label: 'Проводные наушники', icon: 'headset'),
+      'bluetooth' => AudioDevice(
+          id: id,
+          label: d.label.isEmpty || d.label.toLowerCase().contains('bluetooth')
+              ? 'Bluetooth-наушники'
+              : 'Bluetooth: ${d.label}',
+          icon: 'bluetooth',
+        ),
+      _ => AudioDevice(id: id, label: d.label, icon: 'speaker'),
+    };
   }
 
   /// Как долго я в комнате (для экрана).

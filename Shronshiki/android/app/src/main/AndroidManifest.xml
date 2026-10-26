@@ -48,12 +48,11 @@
         </activity>
         <!-- Ссылки обрабатывает пакет app_links, а не встроенный роутер Flutter -->
         <meta-data android:name="flutter_deeplinking_enabled" android:value="false" />
-        <!-- Фоновая работа звонка (flutter_foreground_task). Имя сервиса менять нельзя. -->
+        <!-- Фоновая работа звонка и кнопка наушников (см. CallService.kt) -->
         <service
-            android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
+            android:name=".CallService"
             android:foregroundServiceType="microphone"
-            android:exported="false"
-            android:stopWithTask="true" />
+            android:exported="false" />
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

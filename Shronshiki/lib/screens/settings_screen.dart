@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../app_state.dart';
 import '../services/background_call.dart';
+import '../services/call_session.dart';
+import '../services/diagnostics.dart';
 import 'errors.dart';
 import 'setup_screen.dart';
 
@@ -49,8 +51,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _runDiagnostics() async {
+    final results = ValueNotifier<List<DiagResult>>([]);
+    final done = ValueNotifier(false);
+    Diagnostics.run((r) => results.value = r).whenComplete(() => done.value = true);
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Проверка связи'),
+        content: ListenableBuilder(
+          listenable: Listenable.merge([results, done]),
+          builder: (context, _) => Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final r in results.value)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Text('${r.ok ? '✅' : '❌'} ${r.title}\n${r.detail}'),
+                ),
+              if (!done.value) const LinearProgressIndicator(),
+            ],
+          ),
+        ),
+        actions: [
+          ListenableBuilder(
+            listenable: done,
+            builder: (context, _) => TextButton(
+              onPressed: done.value
+                  ? () {
+                      Clipboard.setData(ClipboardData(text: results.value.join('\n')));
+                      showError(this.context, 'Результат скопирован');
+                    }
+                  : null,
+              child: const Text('Скопировать'),
+            ),
+          ),
+          FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Закрыть')),
+        ],
+      ),
+    );
+  }
+
   Future<void> _signOut() async {
-    Navigator.of(context).popUntil((route) => route.isFirst);
+    final navigator = Navigator.of(context);
+    await CallSession.leave();
+    navigator.popUntil((route) => route.isFirst);
     await _app.db.auth.signOut();
   }
 
@@ -96,10 +142,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 subtitle: const Text(
                     'Если звонок обрывается при выключенном экране — отключите для приложения '
                     'оптимизацию батареи'),
-                onTap: () => FlutterForegroundTask.requestIgnoreBatteryOptimization(),
+                onTap: BackgroundCall.requestIgnoreBatteryOptimizations,
               ),
             const Divider(),
             const _Header('Сервер'),
+            ListTile(
+              leading: const Icon(Icons.network_check),
+              title: const Text('Проверить связь с сервером'),
+              subtitle: const Text('Покажет, мешает ли провайдер (сравните с VPN и без)'),
+              onTap: _runDiagnostics,
+            ),
             ExpansionTile(
               leading: const Icon(Icons.dns_outlined),
               title: const Text('Supabase и TURN'),

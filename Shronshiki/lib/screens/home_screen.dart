@@ -3,6 +3,9 @@ import 'package:flutter/services.dart';
 
 import '../app_state.dart';
 import '../services/rooms.dart';
+import '../services/call_controller.dart';
+import '../services/call_session.dart';
+import '../widgets/active_call_banner.dart';
 import 'errors.dart';
 import 'room_screen.dart';
 import 'settings_screen.dart';
@@ -85,11 +88,31 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openRoom(Room room) async {
+    final active = CallSession.current.value;
+    if (active != null && active.isActive && active.room.id != room.id) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Перейти в другую комнату?'),
+          content: Text('Вы выйдете из комнаты «${active.room.name}».'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Перейти')),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
     final user = _app.db.auth.currentUser!;
+    final call = CallSession.join(room, user.displayName);
+    await _showCall(call);
+  }
+
+  Future<void> _showCall(CallController call) async {
     _inRoom = true;
     try {
       await Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => RoomScreen(room: room, displayName: user.displayName),
+        builder: (_) => RoomScreen(call: call),
       ));
     } finally {
       _inRoom = false;
@@ -232,6 +255,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Text('Привет, ${user.displayName}!', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 16),
+            ActiveCallBanner(onOpen: _showCall),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -289,7 +313,10 @@ class _HomeScreenState extends State<HomeScreen> {
                     'зарегистрируйтесь.'),
                 const SizedBox(height: 12),
                 OutlinedButton(
-                  onPressed: () => _app.db.auth.signOut(),
+                  onPressed: () async {
+                    await CallSession.leave();
+                    await _app.db.auth.signOut();
+                  },
                   child: const Text('Войти или зарегистрироваться'),
                 ),
               ],
