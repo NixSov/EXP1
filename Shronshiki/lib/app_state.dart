@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:app_links/app_links.dart';
 import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'config.dart';
 import 'services/rooms.dart';
+import 'services/server_route.dart';
 import 'services/settings.dart';
 import 'services/theme_settings.dart';
 
@@ -25,6 +25,9 @@ class AppState {
 
   bool supabaseReady = false;
 
+  /// Путь к Supabase: напрямую или через посредника. Создаётся вместе с Supabase.
+  late ServerRoute route;
+
   SupabaseClient get db => Supabase.instance.client;
   RoomsRepository get rooms => RoomsRepository(db);
 
@@ -42,6 +45,9 @@ class AppState {
 
   Future<void> initSupabase() async {
     if (supabaseReady) return;
+    route = await ServerRoute.create(supabaseUrl: config.supabaseUrl, proxyUrl: config.proxyUrl);
+    // Меряем оба пути в фоне; первые запросы при необходимости сами уйдут через посредника.
+    unawaited(route.probe(force: true));
     await Supabase.initialize(
       url: config.supabaseUrl,
       // Подходит и старый anon key (eyJ...), и новый publishable key (sb_publishable_...).
@@ -49,7 +55,7 @@ class AppState {
       // По умолчанию Realtime отключается при сворачивании приложения — это оборвало бы
       // звонок в фоне. Сокет живёт, пока работает foreground service.
       realtimeLifecycleOptions: const RealtimeLifecycleOptions.manual(),
-      httpClient: _FreshConnectionClient(),
+      httpClient: route.createClient(),
     );
     supabaseReady = true;
   }
@@ -65,22 +71,6 @@ class AppState {
       // Платформа без поддержки ссылок — вход только по коду.
     }
   }
-}
-
-/// HTTP-клиент без keep-alive: каждый запрос — новое соединение. Некоторые
-/// провайдеры обрывают долгие соединения с зарубежными серверами, а короткие
-/// пропускают (проверено «Проверкой связи» без VPN).
-class _FreshConnectionClient extends http.BaseClient {
-  final http.Client _inner = http.Client();
-
-  @override
-  Future<http.StreamedResponse> send(http.BaseRequest request) {
-    request.persistentConnection = false;
-    return _inner.send(request);
-  }
-
-  @override
-  void close() => _inner.close();
 }
 
 extension UserDisplayName on User {

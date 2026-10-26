@@ -54,6 +54,7 @@ class _ServerConfigFormState extends State<ServerConfigForm> {
   late final TextEditingController _turnUrls;
   late final TextEditingController _turnUser;
   late final TextEditingController _turnPass;
+  late final TextEditingController _proxy;
   bool _saving = false;
   String? _error;
 
@@ -66,11 +67,12 @@ class _ServerConfigFormState extends State<ServerConfigForm> {
     _turnUrls = TextEditingController(text: c.turnUrls.join(', '));
     _turnUser = TextEditingController(text: c.turnUsername);
     _turnPass = TextEditingController(text: c.turnCredential);
+    _proxy = TextEditingController(text: c.proxyUrl);
   }
 
   @override
   void dispose() {
-    for (final c in [_url, _key, _turnUrls, _turnUser, _turnPass]) {
+    for (final c in [_url, _key, _turnUrls, _turnUser, _turnPass, _proxy]) {
       c.dispose();
     }
     super.dispose();
@@ -88,6 +90,7 @@ class _ServerConfigFormState extends State<ServerConfigForm> {
       turnUrls: AppConfig.splitUrls(_turnUrls.text),
       turnUsername: _turnUser.text.trim(),
       turnCredential: _turnPass.text.trim(),
+      proxyUrl: _proxy.text.trim().replaceAll(RegExp(r'/+$'), ''),
     );
     try {
       await config.save();
@@ -126,6 +129,21 @@ class _ServerConfigFormState extends State<ServerConfigForm> {
               border: OutlineInputBorder(),
             ),
             validator: (v) => (v ?? '').trim().length > 20 ? null : 'Вставьте ключ целиком',
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _proxy,
+            keyboardType: TextInputType.url,
+            decoration: const InputDecoration(
+              labelText: 'Посредник (необязательно)',
+              hintText: 'https://shronshiki.….deno.dev',
+              helperText: 'Если supabase.co недоступен без VPN',
+              border: OutlineInputBorder(),
+            ),
+            validator: (v) {
+              final text = (v ?? '').trim();
+              return text.isEmpty || text.startsWith('https://') ? null : 'Адрес должен начинаться с https://';
+            },
           ),
           const SizedBox(height: 20),
           Text('TURN-сервер (необязательно)', style: Theme.of(context).textTheme.titleSmall),

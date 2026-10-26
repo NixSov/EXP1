@@ -1,0 +1,29 @@
+# Посредник Shronshiki → Supabase (Deno Deploy)
+
+Нужен, когда у провайдера `*.supabase.co` недоступен или очень медленный
+(Supabase работает через Cloudflare, а соединения с ним часть российских
+операторов режет). Deno Deploy из России доступен — проверено «Проверкой
+площадок» в приложении.
+
+Пересылает только `/auth/v1/*` и `/rest/v1/*` в один проект Supabase.
+`GET /health` — проверка доступности. Ключей не хранит.
+
+## Развёртывание
+
+Deno Deploy пока не запускает код из подпапки, поэтому `main.ts` кладётся
+в отдельный репозиторий (в его корень).
+
+1. console.deno.com → войти через GitHub → создать организацию.
+2. **+ New App** → выбрать репозиторий с `main.ts` → **Create App**.
+3. Настройки приложения → **Environment Variables** → **+ Add variable**:
+   `SUPABASE_URL` = `https://<проект>.supabase.co`, контекст *Production* → **Save**.
+4. Открыть адрес приложения + `/health` — должно быть `ok`.
+5. Адрес приложения вписать в Shronshiki: **Настройки → Supabase и TURN → Посредник**
+   (или `PROXY_URL` в `config/app_config.json` при сборке).
+
+## Локальная проверка
+
+```bash
+SUPABASE_URL=https://<проект>.supabase.co deno run --allow-net --allow-env main.ts
+curl http://localhost:8000/health
+```

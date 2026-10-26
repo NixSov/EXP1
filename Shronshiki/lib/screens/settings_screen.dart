@@ -10,6 +10,7 @@ import '../services/call_session.dart';
 import '../services/diagnostics.dart';
 import '../services/ice_check.dart';
 import '../services/platform_check.dart';
+import '../services/server_route.dart';
 import '../services/theme_settings.dart';
 import '../widgets/color_picker_dialog.dart';
 import 'errors.dart';
@@ -106,6 +107,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  List<Widget> _routeSection(BuildContext context) {
+    final route = _app.route;
+    if (!route.hasProxy) {
+      return const [
+        ListTile(
+          leading: Icon(Icons.alt_route),
+          title: Text('Подключение к серверу: напрямую'),
+          subtitle: Text('Посредник не настроен (Supabase и TURN → «Посредник»)'),
+        ),
+      ];
+    }
+    return [
+      ListTile(
+        leading: const Icon(Icons.alt_route),
+        title: const Text('Подключение к серверу'),
+        subtitle: Text('Сейчас: ${route.description}'),
+        trailing: IconButton(
+          tooltip: 'Перемерить',
+          icon: const Icon(Icons.refresh),
+          onPressed: () => route.probe(force: true),
+        ),
+      ),
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+        child: SegmentedButton<RouteMode>(
+          segments: const [
+            ButtonSegment(value: RouteMode.auto, label: Text('Авто')),
+            ButtonSegment(value: RouteMode.direct, label: Text('Напрямую')),
+            ButtonSegment(value: RouteMode.proxy, label: Text('Посредник')),
+          ],
+          selected: {route.mode},
+          onSelectionChanged: (v) => route.mode = v.first,
+        ),
+      ),
+    ];
   }
 
   List<Widget> _themeSection(BuildContext context) {
@@ -301,7 +339,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Настройки')),
       body: ListenableBuilder(
-        listenable: Listenable.merge([settings, _app.theme]),
+        listenable: Listenable.merge([settings, _app.theme, _app.route]),
         builder: (context, _) => ListView(
           children: [
             if (user != null) ...[
@@ -350,6 +388,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             const Divider(),
             const _Header('Сервер'),
+            ..._routeSection(context),
             ListTile(
               leading: const Icon(Icons.network_check),
               title: const Text('Проверить связь с сервером'),

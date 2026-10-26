@@ -25,6 +25,15 @@ class Diagnostics {
       onProgress(List.of(results));
     }
 
+    final route = AppState.instance.route;
+    if (route.hasProxy) {
+      await route.probe(force: true);
+      add(DiagResult('Путь к серверу',
+          ok: route.lastDirectMs != null || route.lastProxyMs != null,
+          detail: 'напрямую: ${route.lastDirectMs != null ? '${route.lastDirectMs} мс' : 'не отвечает'}\n'
+              'посредник: ${route.lastProxyMs != null ? '${route.lastProxyMs} мс' : 'не отвечает'}\n'
+              'выбрано: ${route.usingProxy ? 'посредник' : 'напрямую'}'));
+    }
     add(await _health());
     add(await _database());
     add(await _series());

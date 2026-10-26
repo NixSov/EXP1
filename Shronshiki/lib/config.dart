@@ -12,6 +12,7 @@ class AppConfig {
     required this.turnUrls,
     required this.turnUsername,
     required this.turnCredential,
+    this.proxyUrl = '',
   });
 
   final String supabaseUrl;
@@ -19,6 +20,9 @@ class AppConfig {
   final List<String> turnUrls;
   final String turnUsername;
   final String turnCredential;
+
+  /// Посредник к Supabase на Deno Deploy (https://….deno.dev). Пусто — без посредника.
+  final String proxyUrl;
 
   /// STUN-серверы: через них телефон узнаёт свой внешний адрес. Кроме Google —
   /// российские (Яндекс, Sipnet) на случай, если зарубежные недоступны без VPN.
@@ -50,6 +54,7 @@ class AppConfig {
   static const _kTurnUrls = 'cfg_turn_urls';
   static const _kTurnUser = 'cfg_turn_user';
   static const _kTurnPass = 'cfg_turn_pass';
+  static const _kProxy = 'cfg_proxy_url';
 
   static Future<AppConfig> load() async {
     final prefs = await SharedPreferences.getInstance();
@@ -64,6 +69,7 @@ class AppConfig {
       turnUrls: splitUrls(pick(_kTurnUrls, const String.fromEnvironment('TURN_URLS'))),
       turnUsername: pick(_kTurnUser, const String.fromEnvironment('TURN_USERNAME')),
       turnCredential: pick(_kTurnPass, const String.fromEnvironment('TURN_CREDENTIAL')),
+      proxyUrl: pick(_kProxy, const String.fromEnvironment('PROXY_URL')),
     );
   }
 
@@ -80,5 +86,6 @@ class AppConfig {
     await prefs.setString(_kTurnUrls, turnUrls.join(','));
     await prefs.setString(_kTurnUser, turnUsername);
     await prefs.setString(_kTurnPass, turnCredential);
+    await prefs.setString(_kProxy, proxyUrl);
   }
 }
