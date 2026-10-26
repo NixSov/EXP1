@@ -54,6 +54,16 @@ void main() {
     expect(find.text('Боря'), findsOneWidget, reason: 'имя показывается один раз для подряд идущих');
     expect(call.unreadChat, 0);
     expect(tester.takeException(), isNull);
+
+    // Подсказка упоминаний.
+    await tester.enterText(find.byType(TextField), 'Привет @в');
+    await tester.pumpAndSettle();
+    expect(find.text('@все'), findsOneWidget);
+    await tester.tap(find.text('@все'));
+    await tester.pumpAndSettle();
+    expect(find.text('Привет @все '), findsOneWidget);
+    expect(find.text('@все'), findsNothing, reason: 'после выбора подсказка скрывается');
+
     Navigator.of(tester.element(find.text('Чат комнаты'))).pop();
     await tester.pumpAndSettle();
   });

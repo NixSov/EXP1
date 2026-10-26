@@ -8,6 +8,7 @@ import 'screens/home_screen.dart';
 import 'screens/setup_screen.dart';
 import 'services/background_call.dart';
 import 'services/call_session.dart';
+import 'services/mentions.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,6 +30,7 @@ class ShronshikiApp extends StatelessWidget {
         title: 'Shronshiki',
         debugShowCheckedModeBanner: false,
         theme: theme.themeData,
+        scaffoldMessengerKey: MentionWatcher.messengerKey,
         builder: (context, child) => theme.wrapBackground(child ?? const SizedBox.shrink()),
         home: const RootScreen(),
       ),

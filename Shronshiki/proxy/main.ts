@@ -8,6 +8,14 @@
 //
 // Адрес проекта задаётся переменной окружения SUPABASE_URL
 // (Deno Deploy → Settings → Environment Variables).
+//
+// Письма об упоминаниях в чате (необязательно): раз в минуту посредник забирает
+// из базы упоминания, которые никто не увидел в приложении за 90 секунд, и
+// передаёт их скрипту Google Apps Script, который отправляет письма из Gmail
+// (сам Deno Deploy почту отправлять не даёт). Нужны переменные:
+//   SUPABASE_KEY      — publishable key проекта (публичный);
+//   NOTIFY_SECRET     — секрет из SQL-миграции mentions;
+//   MAIL_WEBHOOK_URL  — адрес веб-приложения Apps Script.
 
 const TARGET = (Deno.env.get("SUPABASE_URL") ?? "").replace(/\/+$/, "");
 const ALLOWED_PREFIXES = ["/auth/v1/", "/rest/v1/"];
@@ -25,6 +33,71 @@ const DROP_REQUEST_HEADERS = [
   "content-length",
   "accept-encoding",
 ];
+
+type MentionEmail = {
+  email: string;
+  from_name: string;
+  body: string;
+  room_name: string;
+  room_code: string;
+};
+
+/** Забирает неотправленные упоминания и рассылает письма. Возвращает число писем. */
+export async function sendMentionEmails(env: (name: string) => string | undefined = Deno.env.get): Promise<number> {
+  const target = (env("SUPABASE_URL") ?? "").replace(/\/+$/, "");
+  const key = env("SUPABASE_KEY");
+  const secret = env("NOTIFY_SECRET");
+  const hook = env("MAIL_WEBHOOK_URL");
+  if (!target || !key || !secret || !hook) return 0;
+
+  const res = await fetch(`${target}/rest/v1/rpc/claim_mention_emails`, {
+    method: "POST",
+    headers: { apikey: key, "content-type": "application/json" },
+    body: JSON.stringify({ p_secret: secret }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  if (!res.ok) {
+    console.error("claim_mention_emails failed", res.status, await res.text());
+    return 0;
+  }
+  const items = (await res.json()) as MentionEmail[] | null;
+  let sent = 0;
+  for (const item of items ?? []) {
+    const text = [
+      `${item.from_name} упоминает вас в комнате «${item.room_name}»:`,
+      "",
+      `«${item.body}»`,
+      "",
+      `Код комнаты: ${item.room_code}`,
+      `Открыть в приложении: shronshiki://join/${item.room_code}`,
+      "",
+      "Отключить такие письма: Shronshiki → Настройки → «Упоминания на почту».",
+    ].join("\n");
+    try {
+      const mail = await fetch(hook, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          secret,
+          to: item.email,
+          subject: `${item.from_name} упоминает вас в Shronshiki`,
+          text,
+        }),
+        signal: AbortSignal.timeout(20_000),
+      });
+      if (mail.ok) sent++;
+      else console.error("mail webhook failed", mail.status);
+    } catch (e) {
+      console.error("mail webhook error", e);
+    }
+  }
+  return sent;
+}
+
+// Раз в минуту. Без переменных для писем ничего не делает.
+Deno.cron("mention emails", "* * * * *", async () => {
+  await sendMentionEmails();
+});
 
 Deno.serve(async (req) => {
   const url = new URL(req.url);

@@ -128,6 +128,21 @@ class RoomSignaling {
     }).timeout(_timeout);
   }
 
+  /// Кого можно упомянуть: бывавшие в комнате (сервер с миграцией mentions).
+  /// null — сервер такого не умеет.
+  Future<List<({String name, bool inRoom})>?> memberNames() async {
+    try {
+      final rows = await _db.rpc('room_member_names', params: {'p_room': roomId}).timeout(_timeout) as List;
+      return [
+        for (final r in rows)
+          (name: (r as Map)['name'] as String, inRoom: r['in_room'] == true),
+      ];
+    } on PostgrestException catch (e) {
+      if (e.code == 'PGRST202') return null;
+      rethrow;
+    }
+  }
+
   /// Кладёт сообщение в очередь. ICE-кандидаты идут пачками — отправляем
   /// их одним запросом через небольшую паузу.
   void send(String to, Map<String, dynamic> payload) {

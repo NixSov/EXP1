@@ -38,6 +38,10 @@ class _RoomChatState extends State<_RoomChat> {
   String? _error;
   int _shown = 0;
 
+  /// Подсказка упоминаний: кого можно упомянуть и что набрано после «@».
+  List<({String name, bool inRoom})> _candidates = const [];
+  String? _mentionQuery;
+
   CallController get _call => widget.call;
 
   @override
@@ -45,11 +49,56 @@ class _RoomChatState extends State<_RoomChat> {
     super.initState();
     _call.addListener(_onCall);
     _shown = _call.chat.length;
+    _text.addListener(_onText);
+    _call.mentionCandidates().then((names) {
+      if (mounted) setState(() => _candidates = names);
+    });
+  }
+
+  /// Текст до курсора заканчивается на «@что-то» — показываем подсказку.
+  void _onText() {
+    final value = _text.value;
+    final cursor = value.selection.isValid ? value.selection.baseOffset : value.text.length;
+    final before = value.text.substring(0, cursor.clamp(0, value.text.length));
+    final match = RegExp(r'(?:^|\s)@([^\s@]*)$').firstMatch(before);
+    final query = match?.group(1);
+    if (query != _mentionQuery) setState(() => _mentionQuery = query);
+  }
+
+  List<({String name, bool inRoom})> get _suggestions {
+    final query = _mentionQuery?.toLowerCase();
+    if (query == null) return const [];
+    return [
+      (name: 'все', inRoom: false),
+      ..._candidates,
+    ].where((c) => c.name.toLowerCase().startsWith(query)).take(8).toList();
+  }
+
+  void _insertMention(String name) {
+    final value = _text.value;
+    final cursor = value.selection.isValid ? value.selection.baseOffset : value.text.length;
+    final before = value.text.substring(0, cursor);
+    final after = value.text.substring(cursor);
+    final start = before.lastIndexOf('@');
+    if (start < 0) return;
+    final inserted = '${before.substring(0, start)}@$name ';
+    _text.value = TextEditingValue(
+      text: '$inserted$after',
+      selection: TextSelection.collapsed(offset: inserted.length),
+    );
+  }
+
+  bool _mentionsMe(ChatMessage m) {
+    if (m.peerId == _call.peerId) return false;
+    final body = m.body.toLowerCase();
+    return body.contains('@${_call.displayName.toLowerCase()}') ||
+        RegExp(r'(^|[^\p{L}\p{N}_])@(все|all)($|[^\p{L}\p{N}_])', unicode: true).hasMatch(body);
   }
 
   @override
   void dispose() {
     _call.removeListener(_onCall);
+    _text.removeListener(_onText);
     _text.dispose();
     _scroll.dispose();
     super.dispose();
@@ -126,6 +175,7 @@ class _RoomChatState extends State<_RoomChat> {
                             message: m,
                             mine: m.peerId == _call.peerId,
                             showName: previous == null || previous.peerId != m.peerId,
+                            mentionsMe: _mentionsMe(m),
                           );
                         },
                       ),
@@ -134,6 +184,30 @@ class _RoomChatState extends State<_RoomChat> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(_error!, style: TextStyle(color: scheme.error)),
+            ),
+          if (_suggestions.isNotEmpty)
+            SizedBox(
+              height: 48,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                children: [
+                  for (final c in _suggestions)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: ActionChip(
+                        avatar: Icon(
+                          c.name == 'все'
+                              ? Icons.groups
+                              : (c.inRoom ? Icons.graphic_eq : Icons.person_outline),
+                          size: 18,
+                        ),
+                        label: Text('@${c.name}'),
+                        onPressed: () => _insertMention(c.name),
+                      ),
+                    ),
+                ],
+              ),
             ),
           SafeArea(
             top: false,
@@ -152,7 +226,7 @@ class _RoomChatState extends State<_RoomChat> {
                       textInputAction: TextInputAction.send,
                       onSubmitted: (_) => _send(),
                       decoration: const InputDecoration(
-                        hintText: 'Сообщение',
+                        hintText: 'Сообщение (@имя — упомянуть)',
                         counterText: '',
                         border: OutlineInputBorder(),
                         isDense: true,
@@ -181,11 +255,19 @@ class _RoomChatState extends State<_RoomChat> {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.message, required this.mine, required this.showName});
+  const _Bubble({
+    required this.message,
+    required this.mine,
+    required this.showName,
+    this.mentionsMe = false,
+  });
 
   final ChatMessage message;
   final bool mine;
   final bool showName;
+
+  /// В сообщении упомянули меня — подсвечиваем рамкой.
+  final bool mentionsMe;
 
   @override
   Widget build(BuildContext context) {
@@ -201,6 +283,7 @@ class _Bubble extends StatelessWidget {
             decoration: BoxDecoration(
               color: mine ? scheme.primary : scheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(14),
+              border: mentionsMe ? Border.all(color: scheme.primary, width: 2) : null,
             ),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),

@@ -5,6 +5,7 @@ import '../app_state.dart';
 import '../services/rooms.dart';
 import '../services/call_controller.dart';
 import '../services/call_session.dart';
+import '../services/mentions.dart';
 import '../widgets/active_call_banner.dart';
 import 'errors.dart';
 import 'room_screen.dart';
@@ -34,11 +35,14 @@ class _HomeScreenState extends State<HomeScreen> {
     if (!_isGuest) _loadRooms();
     _app.pendingJoinCode.addListener(_onInvite);
     WidgetsBinding.instance.addPostFrameCallback((_) => _onInvite());
+    // Упоминания в чатах комнат, пока приложение запущено.
+    MentionWatcher.start();
   }
 
   @override
   void dispose() {
     _app.pendingJoinCode.removeListener(_onInvite);
+    MentionWatcher.stop();
     _code.dispose();
     super.dispose();
   }

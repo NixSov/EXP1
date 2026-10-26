@@ -68,6 +68,16 @@ void FlutterWindow::SetUpCallChannel() {
           button_test_active_ = true;
         } else if (method == "stopButtonTest") {
           button_test_active_ = false;
+        } else if (method == "flash") {
+          // Mention in a room chat: flash the taskbar button until the
+          // window comes to the foreground.
+          FLASHWINFO info{};
+          info.cbSize = static_cast<UINT>(sizeof(FLASHWINFO));
+          info.hwnd = GetHandle();
+          info.dwFlags = FLASHW_ALL | FLASHW_TIMERNOFG;
+          ::FlashWindowEx(&info);
+          result->Success();
+          return;
         } else if (method != "update") {
           result->NotImplemented();
           return;

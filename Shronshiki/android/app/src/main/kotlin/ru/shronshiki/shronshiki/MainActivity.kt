@@ -2,6 +2,10 @@ package ru.shronshiki.shronshiki
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -53,6 +57,14 @@ class MainActivity : FlutterActivity() {
                     MediaButtons.stop()
                     result.success(null)
                 }
+                "showMention" -> {
+                    showMention(
+                        call.argument<String>("title") ?: "Shronshiki",
+                        call.argument<String>("text") ?: "",
+                        call.argument<String>("code") ?: "",
+                    )
+                    result.success(null)
+                }
                 "moveToBack" -> {
                     // «Назад» на главном экране во время звонка сворачивает приложение, а не закрывает.
                     moveTaskToBack(true)
@@ -69,6 +81,45 @@ class MainActivity : FlutterActivity() {
                 else -> result.notImplemented()
             }
         }
+    }
+
+    /** Упоминание в чате. Нажатие открывает shronshiki://join/КОД — вход в комнату. */
+    private fun showMention(title: String, text: String, code: String) {
+        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            manager.createNotificationChannel(
+                NotificationChannel(MENTIONS_CHANNEL, "Упоминания в чате", NotificationManager.IMPORTANCE_HIGH)
+                    .apply { description = "Когда вас упоминают через @имя" },
+            )
+        }
+        val open = Intent(Intent.ACTION_VIEW, Uri.parse(if (code.isEmpty()) "shronshiki://" else "shronshiki://join/$code"))
+            .setPackage(packageName)
+            .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        val pending = PendingIntent.getActivity(
+            this, code.hashCode(), open,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Notification.Builder(this, MENTIONS_CHANNEL)
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Builder(this).setPriority(Notification.PRIORITY_HIGH)
+        }
+        val notification = builder
+            .setSmallIcon(android.R.drawable.stat_notify_chat)
+            .setContentTitle(title)
+            .setContentText(text)
+            .setStyle(Notification.BigTextStyle().bigText(text))
+            .setContentIntent(pending)
+            .setAutoCancel(true)
+            .setCategory(Notification.CATEGORY_MESSAGE)
+            .build()
+        manager.notify(MENTIONS_BASE_ID + (System.currentTimeMillis() % 100000).toInt(), notification)
+    }
+
+    companion object {
+        private const val MENTIONS_CHANNEL = "shronshiki_mentions"
+        private const val MENTIONS_BASE_ID = 5000
     }
 
     @SuppressLint("BatteryLife")

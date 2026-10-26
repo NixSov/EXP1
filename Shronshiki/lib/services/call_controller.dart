@@ -282,6 +282,20 @@ class CallController extends ChangeNotifier {
     if (!_chatOpen) unreadChat += messages.where((m) => m.peerId != peerId).length;
   }
 
+  /// Имена для подсказки «@»: бывавшие в комнате, а если сервер этого не умеет —
+  /// те, кто сейчас в комнате.
+  Future<List<({String name, bool inRoom})>> mentionCandidates() async {
+    List<({String name, bool inRoom})>? names;
+    try {
+      names = await _signaling?.memberNames();
+    } catch (_) {}
+    names ??= [
+      for (final p in _participants.values)
+        if (!p.isLocal) (name: p.name, inRoom: true),
+    ];
+    return names.where((n) => n.name != displayName).toList();
+  }
+
   /// Отправка сообщения в чат. Сразу опрашиваем сервер, чтобы оно появилось в ленте.
   Future<void> sendChat(String text) async {
     final body = text.trim();

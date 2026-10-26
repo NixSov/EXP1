@@ -95,6 +95,31 @@ class BackgroundCall {
     } catch (_) {}
   }
 
+  static Future<void> requestNotificationPermission() async {
+    if (!supported) return;
+    try {
+      await _channel.invokeMethod('requestNotificationPermission');
+    } catch (_) {}
+  }
+
+  /// Уведомление об упоминании: системное на Android (нажатие открывает комнату),
+  /// мигание кнопки на панели задач на Windows.
+  static Future<void> showMention({
+    required String title,
+    required String text,
+    required String roomCode,
+  }) async {
+    if (!_channelAvailable) return;
+    try {
+      await _channel.invokeMethod(
+        supported ? 'showMention' : 'flash',
+        {'title': title, 'text': text, 'code': roomCode},
+      );
+    } catch (e) {
+      debugPrint('mention notification failed: $e');
+    }
+  }
+
   static Future<void> moveToBack() async {
     if (!supported) return;
     try {
