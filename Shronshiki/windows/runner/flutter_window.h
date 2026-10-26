@@ -2,7 +2,9 @@
 #define RUNNER_FLUTTER_WINDOW_H_
 
 #include <flutter/dart_project.h>
+#include <flutter/encodable_value.h>
 #include <flutter/flutter_view_controller.h>
+#include <flutter/method_channel.h>
 
 #include <memory>
 
@@ -28,6 +30,17 @@ class FlutterWindow : public Win32Window {
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
+
+  // "shronshiki/call" channel: the Windows counterpart of the Android call
+  // service. While a call (or the button test) is active, the media Play/Pause
+  // key - also sent by headset buttons - is grabbed globally and reported to
+  // Dart to toggle the microphone.
+  void SetUpCallChannel();
+  void UpdateMediaHotkey();
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> call_channel_;
+  bool call_active_ = false;
+  bool button_test_active_ = false;
+  bool hotkey_registered_ = false;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

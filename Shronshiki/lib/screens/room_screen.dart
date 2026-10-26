@@ -6,6 +6,7 @@ import '../services/call_controller.dart';
 import '../services/call_session.dart';
 import 'errors.dart';
 import 'settings_screen.dart';
+import '../widgets/room_chat_sheet.dart';
 
 /// Голосовая комната. Экран только показывает звонок из [CallSession]:
 /// уйти с него назад или в настройки можно, не выходя из комнаты.
@@ -72,6 +73,16 @@ class _RoomScreenState extends State<RoomScreen> {
           ],
         ),
         actions: [
+          if (_call.status == CallStatus.inRoom)
+            IconButton(
+              tooltip: 'Чат комнаты',
+              onPressed: () => showRoomChat(context, _call),
+              icon: Badge(
+                isLabelVisible: _call.unreadChat > 0,
+                label: Text('${_call.unreadChat}'),
+                child: const Icon(Icons.chat_bubble_outline),
+              ),
+            ),
           IconButton(
             tooltip: 'Пригласить',
             icon: const Icon(Icons.person_add_alt_1_outlined),

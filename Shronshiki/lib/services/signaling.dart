@@ -3,9 +3,39 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Сообщение чата комнаты.
+class ChatMessage {
+  ChatMessage({
+    required this.id,
+    required this.peerId,
+    required this.name,
+    required this.body,
+    required this.at,
+  });
+
+  final int id;
+  final String peerId;
+  final String name;
+  final String body;
+  final DateTime at;
+
+  factory ChatMessage.fromMap(Map<String, dynamic> m) => ChatMessage(
+        id: (m['id'] as num).toInt(),
+        peerId: m['peer_id'] as String? ?? '',
+        name: m['name'] as String? ?? 'Участник',
+        body: m['body'] as String? ?? '',
+        at: DateTime.fromMillisecondsSinceEpoch((m['at'] as num?)?.toInt() ?? 0),
+      );
+}
+
 /// Ответ сервера на опрос комнаты.
 class PollResult {
-  PollResult({required this.full, required this.peers, required this.signals});
+  PollResult({
+    required this.full,
+    required this.peers,
+    required this.signals,
+    this.messages = const [],
+  });
 
   final bool full;
 
@@ -14,6 +44,9 @@ class PollResult {
 
   /// Новые сообщения для меня: from, payload.
   final List<({String from, Map<String, dynamic> payload})> signals;
+
+  /// Новые сообщения чата (при входе — последние 100).
+  final List<ChatMessage> messages;
 }
 
 /// Сигналинг через короткие HTTP-запросы к функциям базы (room_poll / room_send /
@@ -29,6 +62,10 @@ class RoomSignaling {
   static const _timeout = Duration(seconds: 8);
 
   int _lastSignalId = 0;
+  int _lastMessageId = 0;
+
+  /// false — на сервере старая версия базы без чата (не выполнена миграция room_chat).
+  bool chatSupported = true;
   final List<Map<String, dynamic>> _outbox = [];
   Timer? _flushTimer;
   bool _flushing = false;
@@ -39,14 +76,25 @@ class RoomSignaling {
     required bool muted,
     required int joinedAt,
   }) async {
-    final raw = await _db.rpc('room_poll', params: {
+    final params = {
       'p_room': roomId,
       'p_peer': peerId,
       'p_name': name,
       'p_muted': muted,
       'p_joined_at': joinedAt,
       'p_after': _lastSignalId,
-    }).timeout(_timeout);
+      if (chatSupported) 'p_after_msg': _lastMessageId,
+    };
+    Object? raw;
+    try {
+      raw = await _db.rpc('room_poll', params: params).timeout(_timeout);
+    } on PostgrestException catch (e) {
+      // База ещё без чата: функция не знает p_after_msg. Работаем без чата.
+      if (!chatSupported || e.code != 'PGRST202') rethrow;
+      chatSupported = false;
+      params.remove('p_after_msg');
+      raw = await _db.rpc('room_poll', params: params).timeout(_timeout);
+    }
     final data = Map<String, dynamic>.from(raw as Map);
     final signals = <({String from, Map<String, dynamic> payload})>[];
     for (final item in (data['signals'] as List?) ?? const []) {
@@ -56,11 +104,28 @@ class RoomSignaling {
       _lastSignalId = id;
       signals.add((from: m['from'] as String, payload: Map<String, dynamic>.from(m['payload'] as Map)));
     }
+    final messages = <ChatMessage>[];
+    for (final item in (data['messages'] as List?) ?? const []) {
+      final message = ChatMessage.fromMap(Map<String, dynamic>.from(item as Map));
+      if (message.id <= _lastMessageId) continue;
+      _lastMessageId = message.id;
+      messages.add(message);
+    }
     return PollResult(
       full: data['full'] == true,
+      messages: messages,
       peers: [for (final p in (data['peers'] as List?) ?? const []) Map<String, dynamic>.from(p as Map)],
       signals: signals,
     );
+  }
+
+  /// Отправляет сообщение в чат комнаты.
+  Future<void> sendChat(String body) async {
+    await _db.rpc('room_chat_send', params: {
+      'p_room': roomId,
+      'p_peer': peerId,
+      'p_body': body,
+    }).timeout(_timeout);
   }
 
   /// Кладёт сообщение в очередь. ICE-кандидаты идут пачками — отправляем

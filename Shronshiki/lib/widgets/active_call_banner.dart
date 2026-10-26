@@ -34,7 +34,9 @@ class ActiveCallBanner extends StatelessWidget {
                   subtitle: Text(
                     call.status == CallStatus.connecting
                         ? 'Подключение…'
-                        : 'Участников: $count · нажмите, чтобы вернуться',
+                        : 'Участников: $count'
+                            '${call.unreadChat > 0 ? ' · новых сообщений: ${call.unreadChat}' : ''}'
+                            ' · нажмите, чтобы вернуться',
                     style: TextStyle(color: scheme.onPrimaryContainer),
                   ),
                   trailing: IconButton(

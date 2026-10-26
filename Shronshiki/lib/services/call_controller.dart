@@ -88,6 +88,25 @@ class CallController extends ChangeNotifier {
   String? inputId;
   String? outputId;
   bool _inputChosenByUser = false;
+
+  /// Чат комнаты (последние сообщения) и сколько из них ещё не прочитано.
+  final List<ChatMessage> chat = [];
+  int unreadChat = 0;
+  bool _chatOpen = false;
+
+  bool get chatOpen => _chatOpen;
+
+  /// Сервер поддерживает чат (выполнена миграция room_chat).
+  bool get chatSupported => _signaling?.chatSupported ?? true;
+  set chatOpen(bool value) {
+    _chatOpen = value;
+    if (value && unreadChat != 0) {
+      unreadChat = 0;
+      notifyListeners();
+    }
+  }
+
+  static const _chatLimit = 200;
   Set<String> _presentIds = {};
 
   final Map<String, Participant> _participants = {};
@@ -228,6 +247,7 @@ class CallController extends ChangeNotifier {
         _startStats();
       }
       _applyPeers(result.peers);
+      _applyChat(result.messages);
       // Строго по порядку: offer раньше своих ICE-кандидатов.
       for (final signal in result.signals) {
         await _onSignal(signal.from, signal.payload);
@@ -253,6 +273,22 @@ class CallController extends ChangeNotifier {
       final settling = _participants.values.any((p) => !p.connected);
       _schedulePoll(settling || status == CallStatus.connecting ? _fastPoll : _slowPoll);
     }
+  }
+
+  void _applyChat(List<ChatMessage> messages) {
+    if (messages.isEmpty) return;
+    chat.addAll(messages);
+    if (chat.length > _chatLimit) chat.removeRange(0, chat.length - _chatLimit);
+    if (!_chatOpen) unreadChat += messages.where((m) => m.peerId != peerId).length;
+  }
+
+  /// Отправка сообщения в чат. Сразу опрашиваем сервер, чтобы оно появилось в ленте.
+  Future<void> sendChat(String text) async {
+    final body = text.trim();
+    final signaling = _signaling;
+    if (body.isEmpty || signaling == null || status != CallStatus.inRoom) return;
+    await signaling.sendChat(body);
+    _schedulePoll(Duration.zero);
   }
 
   static String _shortError(Object? e) {

@@ -3,14 +3,23 @@ import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-/// Связь с нативным CallService на Android: уведомление звонка, работа в фоне,
-/// кнопка наушников. На других платформах ничего не делает.
+/// Связь с нативной частью звонка.
+///
+/// Android (CallService.kt): уведомление, работа в фоне, кнопка наушников.
+/// Windows (flutter_window.cpp): медиаклавиша Play/Pause и кнопка наушников
+/// включают и выключают микрофон, даже когда окно свёрнуто.
 class BackgroundCall {
   BackgroundCall._();
 
   static const _channel = MethodChannel('shronshiki/call');
 
+  /// Фоновый сервис, уведомление, батарея — только Android.
   static bool get supported => !kIsWeb && Platform.isAndroid;
+
+  /// Кнопка наушников / медиаклавиша управляет микрофоном.
+  static bool get hasHeadsetButton => !kIsWeb && (Platform.isAndroid || Platform.isWindows);
+
+  static bool get _channelAvailable => hasHeadsetButton;
 
   static VoidCallback? onHangUp;
   static VoidCallback? onToggleMute;
@@ -19,7 +28,7 @@ class BackgroundCall {
   static void Function(String key)? onMediaKeyTest;
 
   static void init() {
-    if (!supported) return;
+    if (!_channelAvailable) return;
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'onMediaKey') {
         final test = onMediaKeyTest;
@@ -41,9 +50,9 @@ class BackgroundCall {
   }
 
   static Future<void> start({required String roomName, required bool muted}) async {
-    if (!supported) return;
+    if (!_channelAvailable) return;
     try {
-      await _channel.invokeMethod('requestNotificationPermission');
+      if (supported) await _channel.invokeMethod('requestNotificationPermission');
       await _channel.invokeMethod('start', {'title': 'Shronshiki: $roomName', 'muted': muted});
     } catch (e) {
       debugPrint('call service start failed: $e');
@@ -51,7 +60,7 @@ class BackgroundCall {
   }
 
   static Future<void> update({required bool muted}) async {
-    if (!supported) return;
+    if (!_channelAvailable) return;
     try {
       await _channel.invokeMethod('update', {'muted': muted});
     } catch (e) {
@@ -60,7 +69,7 @@ class BackgroundCall {
   }
 
   static Future<void> stop() async {
-    if (!supported) return;
+    if (!_channelAvailable) return;
     try {
       await _channel.invokeMethod('stop');
     } catch (e) {
@@ -70,7 +79,7 @@ class BackgroundCall {
 
   static Future<void> startButtonTest(void Function(String key) onKey) async {
     onMediaKeyTest = onKey;
-    if (!supported) return;
+    if (!_channelAvailable) return;
     try {
       await _channel.invokeMethod('startButtonTest');
     } catch (e) {
@@ -80,7 +89,7 @@ class BackgroundCall {
 
   static Future<void> stopButtonTest() async {
     onMediaKeyTest = null;
-    if (!supported) return;
+    if (!_channelAvailable) return;
     try {
       await _channel.invokeMethod('stopButtonTest');
     } catch (_) {}

@@ -18,6 +18,7 @@
 2. **SQL Editor → New query** — по очереди вставьте целиком файлы и нажмите **Run** для каждого:
    - [`supabase/migrations/20261026000000_init.sql`](supabase/migrations/20261026000000_init.sql) — профили и комнаты;
    - [`supabase/migrations/20261026150000_polling_signaling.sql`](supabase/migrations/20261026150000_polling_signaling.sql) — участники и сигналинг.
+   - [`supabase/migrations/20261026190000_room_chat.sql`](supabase/migrations/20261026190000_room_chat.sql) — чат комнаты.
    Файл можно запускать повторно — он ничего не сломает.
 3. **Authentication → Sign In / Providers**:
    - включите **Allow anonymous sign-ins** (нужно для гостей);

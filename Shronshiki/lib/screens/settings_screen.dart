@@ -295,8 +295,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Подключите наушники и один раз нажмите кнопку, которой ставите '
-                  'музыку на паузу.'),
+              Text(BackgroundCall.supported
+                  ? 'Подключите наушники и один раз нажмите кнопку, которой ставите музыку на паузу.'
+                  : 'Нажмите клавишу Play/Pause на клавиатуре или кнопку на наушниках.'),
               const SizedBox(height: 16),
               if (list.isEmpty)
                 const Row(
@@ -378,12 +379,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     'оптимизацию батареи'),
                 onTap: BackgroundCall.requestIgnoreBatteryOptimizations,
               ),
-            if (BackgroundCall.supported)
+            if (BackgroundCall.hasHeadsetButton)
               ListTile(
                 leading: const Icon(Icons.headset_mic_outlined),
                 title: const Text('Проверка кнопки наушников'),
-                subtitle: const Text('Во время звонка одно нажатие на наушниках включает и '
-                    'выключает микрофон'),
+                subtitle: Text(BackgroundCall.supported
+                    ? 'Во время звонка одно нажатие на наушниках включает и выключает микрофон'
+                    : 'Во время звонка клавиша Play/Pause (или кнопка на наушниках) '
+                        'включает и выключает микрофон'),
                 onTap: _testHeadsetButton,
               ),
             const Divider(),
