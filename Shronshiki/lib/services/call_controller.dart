@@ -85,7 +85,9 @@ class CallController extends ChangeNotifier {
   static const _connectLimit = Duration(seconds: 30);
   bool _tracked = false;
   bool _disposed = false;
-  late final int _joinedAt;
+  bool _reconnecting = false;
+  int? _joinedAtValue;
+  int get _joinedAt => _joinedAtValue!;
   DateTime? _admittedAt;
 
   static const _speakingThreshold = 0.02;
@@ -115,35 +117,42 @@ class CallController extends ChangeNotifier {
   // ---------------------------------------------------------------------------
 
   Future<void> start() async {
-    try {
-      _localStream = await navigator.mediaDevices.getUserMedia({
-        'audio': settings.audioConstraints(),
-        'video': false,
-      });
-    } catch (e) {
-      _fail('Нет доступа к микрофону. Разрешите его приложению в настройках телефона.\n($e)');
-      return;
+    if (_localStream == null) {
+      try {
+        _localStream = await navigator.mediaDevices.getUserMedia({
+          'audio': settings.audioConstraints(),
+          'video': false,
+        });
+      } catch (e) {
+        _fail('Нет доступа к микрофону. Разрешите его приложению в настройках телефона.\n($e)');
+        return;
+      }
+      if (_disposed) return;
+      for (final track in _localStream!.getAudioTracks()) {
+        track.enabled = !muted;
+      }
     }
-    if (_disposed) return;
 
-    speakerOn = settings.speakerByDefault;
+    if (_joinedAtValue == null) {
+      speakerOn = settings.speakerByDefault;
+      _joinedAtValue = DateTime.now().millisecondsSinceEpoch;
+    }
     if (_isMobile) {
       unawaited(Helper.setSpeakerphoneOn(speakerOn).catchError((_) {}));
     }
-
-    _joinedAt = DateTime.now().millisecondsSinceEpoch;
     _participants[peerId] = Participant(
       peerId: peerId,
       name: displayName,
       joinedAt: _joinedAt,
       isLocal: true,
-    );
+    )..muted = muted;
 
     final channel = _db.channel(
       'room:${room.id}',
       opts: RealtimeChannelConfig(key: peerId, private: true),
     );
     _channel = channel;
+    _lastChannelError = null;
 
     _connectTimeout = Timer(_connectLimit, () {
       if (status == CallStatus.connecting && !_tracked) {
@@ -286,6 +295,43 @@ class CallController extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Кнопка «Обновить»: заново подключаемся к комнате и ко всем участникам.
+  /// Микрофон не перезапускается, место в очереди входа сохраняется.
+  Future<void> reconnect() async {
+    if (_reconnecting || _disposed || status == CallStatus.ended) return;
+    _reconnecting = true;
+    try {
+      status = CallStatus.connecting;
+      errorMessage = null;
+      _tracked = false;
+      _statsTimer?.cancel();
+      _presenceTimeout?.cancel();
+      _connectTimeout?.cancel();
+      for (final id in _peers.keys.toList()) {
+        _closePeer(id);
+      }
+      _participants.removeWhere((id, _) => id != peerId);
+      notifyListeners();
+      await _leaveChannel();
+      if (_disposed) return;
+      await start();
+    } finally {
+      _reconnecting = false;
+    }
+  }
+
+  Future<void> _leaveChannel() async {
+    final channel = _channel;
+    _channel = null;
+    if (channel == null) return;
+    try {
+      await channel.untrack();
+    } catch (_) {}
+    try {
+      await _db.removeChannel(channel);
+    } catch (_) {}
+  }
+
   void _setFull() {
     status = CallStatus.full;
     notifyListeners();
@@ -313,14 +359,7 @@ class CallController extends ChangeNotifier {
     for (final id in _peers.keys.toList()) {
       _closePeer(id);
     }
-    final channel = _channel;
-    _channel = null;
-    if (channel != null) {
-      try {
-        await channel.untrack();
-      } catch (_) {}
-      await _db.removeChannel(channel);
-    }
+    await _leaveChannel();
     final stream = _localStream;
     _localStream = null;
     if (stream != null) {

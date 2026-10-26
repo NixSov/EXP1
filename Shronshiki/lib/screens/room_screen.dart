@@ -115,14 +115,14 @@ class _RoomScreenState extends State<RoomScreen> {
           title: 'Комната заполнена',
           text: 'В комнате уже ${widget.room.maxParticipants} участника — это максимум. '
               'Попробуйте позже.',
-          action: FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Назад')),
+          action: _retryOrBack(context),
         );
       case CallStatus.failed:
         return _Message(
           icon: Icons.error_outline,
           title: 'Не получилось войти',
           text: _call.errorMessage ?? 'Неизвестная ошибка',
-          action: FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Назад')),
+          action: _retryOrBack(context),
         );
       case CallStatus.ended:
         return const SizedBox.shrink();
@@ -130,6 +130,20 @@ class _RoomScreenState extends State<RoomScreen> {
         return _inRoom(context);
     }
   }
+
+  Widget _retryOrBack(BuildContext context) => Wrap(
+        spacing: 12,
+        runSpacing: 12,
+        alignment: WrapAlignment.center,
+        children: [
+          OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Назад')),
+          FilledButton.icon(
+            onPressed: _call.reconnect,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Повторить'),
+          ),
+        ],
+      );
 
   Widget _inRoom(BuildContext context) {
     final participants = _call.participants;
@@ -182,6 +196,12 @@ class _RoomScreenState extends State<RoomScreen> {
                   active: _call.speakerOn,
                   onPressed: _call.toggleSpeaker,
                 ),
+              _ControlButton(
+                icon: Icons.sync,
+                label: 'Обновить',
+                active: false,
+                onPressed: _call.reconnect,
+              ),
               _ControlButton(
                 icon: Icons.call_end,
                 label: 'Выйти',
