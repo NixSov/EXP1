@@ -9,6 +9,7 @@ import '../services/background_call.dart';
 import '../services/call_session.dart';
 import '../services/diagnostics.dart';
 import '../services/ice_check.dart';
+import '../services/platform_check.dart';
 import '../services/theme_settings.dart';
 import '../widgets/color_picker_dialog.dart';
 import 'errors.dart';
@@ -59,6 +60,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _runDiagnostics() => _runCheck('Проверка связи', Diagnostics.run);
 
   Future<void> _runIceCheck() => _runCheck('Прямое соединение', IceCheck.run);
+
+  Future<void> _runPlatformCheck() => _runCheck('Проверка площадок', PlatformCheck.run);
 
   Future<void> _runCheck(
     String title,
@@ -358,6 +361,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: const Text('Проверить прямое соединение'),
               subtitle: const Text('STUN и TURN: смогут ли телефоны найти друг друга'),
               onTap: _runIceCheck,
+            ),
+            ListTile(
+              leading: const Icon(Icons.travel_explore),
+              title: const Text('Проверить площадки'),
+              subtitle: const Text('Google Firebase, Deno Deploy, Netlify — доступны ли без VPN'),
+              onTap: _runPlatformCheck,
             ),
             ExpansionTile(
               leading: const Icon(Icons.dns_outlined),
