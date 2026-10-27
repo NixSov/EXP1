@@ -152,6 +152,7 @@ jobs:
             openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in android/app/release.keystore.enc \
               -out "$RUNNER_TEMP/release.jks" -pass env:KEY_PASSWORD
             echo "SHRONSHIKI_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "SHRONSHIKI_KEY_ALIAS=shronshiki" >> "$GITHUB_ENV"
             echo "signed=true" >> "$GITHUB_OUTPUT"
             echo "APK подписывается ключом выпусков"
           else
