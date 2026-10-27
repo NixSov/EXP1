@@ -7,6 +7,7 @@ import '../services/call_session.dart';
 import 'errors.dart';
 import 'settings_screen.dart';
 import '../widgets/room_chat_sheet.dart';
+import '../widgets/screen_share.dart';
 
 /// Голосовая комната. Экран только показывает звонок из [CallSession]:
 /// уйти с него назад или в настройки можно, не выходя из комнаты.
@@ -206,6 +207,26 @@ class _RoomScreenState extends State<RoomScreen> {
     };
   }
 
+  /// Кнопка «Экран»: выбор экрана или окна и качества, потом показ.
+  Future<void> _toggleScreenShare() async {
+    if (_call.sharingScreen) {
+      await _call.stopScreenShare();
+      return;
+    }
+    final other = _call.screenSharer;
+    if (other != null && !other.isLocal) {
+      showError(context, 'Сейчас экран показывает ${other.name}. Показывать может один человек.');
+      return;
+    }
+    final choice = await pickScreenSource(context, _call);
+    if (choice == null || !mounted) return;
+    try {
+      await _call.startScreenShare(choice.source, choice.quality);
+    } catch (e) {
+      if (mounted) showError(context, 'Не получилось показать экран: $e');
+    }
+  }
+
   void _pickInput() => _pickDevice(input: true);
 
   void _pickOutput() => _pickDevice(input: false);
@@ -214,6 +235,8 @@ class _RoomScreenState extends State<RoomScreen> {
     final participants = _call.participants;
     final scheme = Theme.of(context).colorScheme;
     final output = _outputLook;
+    final sharer = _call.screenSharer;
+    final watching = sharer != null && !sharer.isLocal;
     return Column(
       children: [
         if (_call.serverLost)
@@ -227,26 +250,68 @@ class _RoomScreenState extends State<RoomScreen> {
               style: TextStyle(color: scheme.onErrorContainer),
             ),
           ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: Row(
-            children: [
-              Text(
-                'Участники: ${participants.length} из ${_call.room.maxParticipants}',
-                style: Theme.of(context).textTheme.titleSmall,
+        if (_call.sharingScreen)
+          Container(
+            width: double.infinity,
+            color: scheme.primaryContainer,
+            padding: const EdgeInsets.fromLTRB(16, 6, 8, 6),
+            child: Row(
+              children: [
+                Icon(Icons.screen_share, color: scheme.onPrimaryContainer),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Вы показываете экран (${_call.screenQuality.label.toLowerCase()})'
+                    '${_call.turnPeers > 0 ? '. Через TURN: ${_call.turnPeers}' : ''}',
+                    style: TextStyle(color: scheme.onPrimaryContainer),
+                  ),
+                ),
+                TextButton(onPressed: _call.stopScreenShare, child: const Text('Остановить')),
+              ],
+            ),
+          ),
+        if (watching) ...[
+          Expanded(
+            flex: 3,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
+              child: ScreenView(
+                key: ValueKey(sharer.peerId),
+                call: _call,
+                sharer: sharer,
               ),
-            ],
+            ),
           ),
-        ),
-        Expanded(
-          child: GridView.count(
-            padding: const EdgeInsets.all(16),
-            crossAxisCount: 2,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            children: [for (final p in participants) _ParticipantTile(participant: p)],
+          SizedBox(
+            height: 92,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              children: [for (final p in participants) _CompactParticipant(participant: p)],
+            ),
           ),
-        ),
+        ] else ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+            child: Row(
+              children: [
+                Text(
+                  'Участники: ${participants.length} из ${_call.room.maxParticipants}',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: GridView.count(
+              padding: const EdgeInsets.all(16),
+              crossAxisCount: 2,
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              children: [for (final p in participants) _ParticipantTile(participant: p)],
+            ),
+          ),
+        ],
         if (participants.length == 1)
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 24),
@@ -257,9 +322,10 @@ class _RoomScreenState extends State<RoomScreen> {
           ),
         Padding(
           padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Wrap(
+            alignment: WrapAlignment.spaceEvenly,
+            spacing: 8,
+            runSpacing: 12,
             children: [
               _ControlButton(
                 icon: _call.muted ? Icons.mic_off : Icons.mic,
@@ -275,6 +341,13 @@ class _RoomScreenState extends State<RoomScreen> {
                 onPressed: _call.canSwitchSpeaker ? _call.toggleSpeaker : _pickOutput,
                 onMore: _pickOutput,
               ),
+              if (CallController.canShareScreen)
+                _ControlButton(
+                  icon: _call.sharingScreen ? Icons.stop_screen_share : Icons.screen_share,
+                  label: _call.sharingScreen ? 'Стоп показ' : 'Экран',
+                  active: _call.sharingScreen,
+                  onPressed: _toggleScreenShare,
+                ),
               _ControlButton(
                 icon: Icons.sync,
                 label: 'Обновить',
@@ -346,6 +419,11 @@ class _ParticipantTile extends StatelessWidget {
                 ),
               ],
             ),
+            if (p.sharingScreen)
+              Text('показывает экран',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.primary)),
+            if (p.viaTurn)
+              Text('через TURN', style: Theme.of(context).textTheme.bodySmall),
             if (!p.connected)
               Text(
                 switch (p.connection) {
@@ -361,6 +439,50 @@ class _ParticipantTile extends StatelessWidget {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Участник в узкой полосе под демонстрацией экрана.
+class _CompactParticipant extends StatelessWidget {
+  const _CompactParticipant({required this.participant});
+
+  final Participant participant;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final p = participant;
+    final initial = p.name.isEmpty ? '?' : p.name.characters.first.toUpperCase();
+    return SizedBox(
+      width: 76,
+      child: Column(
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: p.speaking ? Colors.greenAccent.shade400 : Colors.transparent,
+                width: 3,
+              ),
+            ),
+            child: CircleAvatar(
+              radius: 20,
+              backgroundColor: scheme.primaryContainer,
+              child: p.muted ? Icon(Icons.mic_off, size: 18, color: scheme.error) : Text(initial),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            p.isLocal ? 'Вы' : p.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
       ),
     );
   }

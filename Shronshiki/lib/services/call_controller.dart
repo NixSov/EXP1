@@ -13,6 +13,20 @@ import 'signaling.dart';
 
 enum CallStatus { connecting, inRoom, full, failed, ended }
 
+/// Качество демонстрации экрана. Через TURN каждый зритель тратит трафик,
+/// поэтому по умолчанию — экономное.
+enum ScreenQuality {
+  economy(fps: 5, bitrate: 300000, label: 'Экономно', hint: '5 кадров/с, ~130 МБ в час на зрителя'),
+  clear(fps: 10, bitrate: 900000, label: 'Чётко', hint: '10 кадров/с, ~400 МБ в час на зрителя');
+
+  const ScreenQuality({required this.fps, required this.bitrate, required this.label, required this.hint});
+
+  final int fps;
+  final int bitrate;
+  final String label;
+  final String hint;
+}
+
 /// Участник комнаты (в том числе я сам).
 class Participant {
   Participant({
@@ -28,6 +42,12 @@ class Participant {
   int joinedAt;
   bool muted = false;
   bool speaking = false;
+
+  /// Участник показывает экран (сообщил сигналом «screen»).
+  bool sharingScreen = false;
+
+  /// Связь с участником идёт через TURN (тратит трафик TURN-сервера).
+  bool viaTurn = false;
 
   /// Состояние P2P-соединения с этим участником.
   RTCPeerConnectionState? connection;
@@ -53,6 +73,14 @@ class _Peer {
   final RTCPeerConnection pc;
   final bool initiator;
   final List<RTCIceCandidate> pendingCandidates = [];
+
+  /// Видеоканал для демонстрации экрана: заводится сразу при соединении,
+  /// а картинка подключается в него без повторного согласования.
+  RTCRtpSender? videoSender;
+
+  /// Входящая демонстрация экрана от этого участника.
+  MediaStream? remoteVideo;
+  String? remoteVideoTrackId;
   bool remoteDescriptionSet = false;
   Timer? restartTimer;
 }
@@ -113,6 +141,14 @@ class CallController extends ChangeNotifier {
   final Map<String, _Peer> _peers = {};
   RoomSignaling? _signaling;
   MediaStream? _localStream;
+
+  /// Пустой поток: его id подписывает видеоканал в SDP, чтобы у зрителя
+  /// картинка пришла вместе с потоком (без этого её не показать на Windows).
+  MediaStream? _screenLabel;
+
+  /// Захват экрана, пока я его показываю.
+  MediaStream? _screenCapture;
+  ScreenQuality _screenQuality = ScreenQuality.economy;
   Timer? _statsTimer;
   Timer? _pollTimer;
   DateTime? _connectStarted;
@@ -159,6 +195,33 @@ class CallController extends ChangeNotifier {
   static bool get _isAndroid => !kIsWeb && Platform.isAndroid;
 
   bool get canSwitchSpeaker => _isMobile;
+
+  /// Показывать экран можно только с компьютера (Windows). Смотреть — везде.
+  static bool get canShareScreen => !kIsWeb && Platform.isWindows;
+
+  /// Я показываю экран.
+  bool get sharingScreen => _screenCapture != null;
+
+  ScreenQuality get screenQuality => _screenQuality;
+
+  /// Кто сейчас показывает экран (первый по порядку входа) или null.
+  Participant? get screenSharer {
+    for (final p in participants) {
+      if (p.isLocal ? sharingScreen : p.sharingScreen) return p;
+    }
+    return null;
+  }
+
+  /// Картинка демонстрации участника: поток и id видеодорожки.
+  ({MediaStream stream, String? trackId})? screenOf(String remoteId) {
+    final peer = _peers[remoteId];
+    final stream = peer?.remoteVideo;
+    if (stream == null) return null;
+    return (stream: stream, trackId: peer!.remoteVideoTrackId);
+  }
+
+  /// Сколько участников на связи через TURN.
+  int get turnPeers => _participants.values.where((p) => !p.isLocal && p.viaTurn).length;
 
   bool get speakerOn => outputId == 'speaker';
 
@@ -408,6 +471,10 @@ class CallController extends ChangeNotifier {
     for (final id in _peers.keys.toList()) {
       _closePeer(id);
     }
+    await _stopCapture();
+    final label = _screenLabel;
+    _screenLabel = null;
+    await label?.dispose().catchError((_) {});
     final signaling = _signaling;
     _signaling = null;
     await signaling?.leave();
@@ -446,6 +513,21 @@ class CallController extends ChangeNotifier {
         await pc.addTrack(track, stream);
       }
     }
+    if (initiator) {
+      // Видеоканал под демонстрацию экрана. У answerer он появится из offer.
+      try {
+        final transceiver = await pc.addTransceiver(
+          kind: RTCRtpMediaType.RTCRtpMediaTypeVideo,
+          init: RTCRtpTransceiverInit(
+            direction: TransceiverDirection.SendRecv,
+            streams: [await _screenLabelStream()],
+          ),
+        );
+        peer.videoSender = transceiver.sender;
+      } catch (e) {
+        debugPrint('video transceiver failed: $e');
+      }
+    }
 
     pc.onIceCandidate = (candidate) {
       if (candidate.candidate == null) return;
@@ -477,20 +559,26 @@ class CallController extends ChangeNotifier {
     };
 
     // Входящий звук на Android и Windows воспроизводится автоматически.
-    pc.onTrack = (event) {};
+    // Видео — это демонстрация экрана, её показывает экран комнаты.
+    pc.onTrack = (event) {
+      if (event.track.kind != 'video') return;
+      peer.remoteVideo = event.streams.firstOrNull;
+      peer.remoteVideoTrackId = event.track.id;
+      if (!_disposed) notifyListeners();
+    };
     return peer;
   }
 
   Future<void> _callPeer(String remoteId, {bool iceRestart = false}) async {
     try {
       final peer = _peers[remoteId] ?? await _createPeer(remoteId, initiator: true);
+      // Без offerToReceive*: с ними libwebrtc меняет направление видеоканала.
       final offer = await peer.pc.createOffer({
-        'offerToReceiveAudio': true,
-        'offerToReceiveVideo': false,
         if (iceRestart) 'iceRestart': true,
       });
       await peer.pc.setLocalDescription(offer);
       _sendSignal(remoteId, 'offer', {'sdp': offer.sdp, 'sdpType': offer.type});
+      if (!iceRestart) await _attachScreen(remoteId, peer);
     } catch (e) {
       debugPrint('offer to $remoteId failed: $e');
     }
@@ -535,9 +623,12 @@ class CallController extends ChangeNotifier {
               RTCSessionDescription(data['sdp'] as String?, data['sdpType'] as String?));
           peer.remoteDescriptionSet = true;
           await _flushCandidates(peer);
+          final fresh = peer.videoSender == null;
+          if (fresh) await _adoptVideoChannel(peer);
           final answer = await peer.pc.createAnswer({});
           await peer.pc.setLocalDescription(answer);
           _sendSignal(from, 'answer', {'sdp': answer.sdp, 'sdpType': answer.type});
+          if (fresh) await _attachScreen(from, peer);
         case 'answer':
           final peer = _peers[from];
           if (peer == null) return;
@@ -545,6 +636,10 @@ class CallController extends ChangeNotifier {
               RTCSessionDescription(data['sdp'] as String?, data['sdpType'] as String?));
           peer.remoteDescriptionSet = true;
           await _flushCandidates(peer);
+        case 'screen':
+          final participant = _participants[from];
+          if (participant != null) participant.sharingScreen = data['on'] == true;
+          notifyListeners();
         case 'bye':
           _presentIds.remove(from);
           _removeParticipant(from);
@@ -753,6 +848,14 @@ class CallController extends ChangeNotifier {
           continue;
         }
         var remoteLevel = 0.0;
+        final participant = _participants[entry.key];
+        if (participant != null) {
+          final turn = _usesTurn(reports);
+          if (participant.viaTurn != turn) {
+            participant.viaTurn = turn;
+            changed = true;
+          }
+        }
         for (final report in reports) {
           final level = report.values['audioLevel'];
           if (level is! num) continue;
@@ -762,7 +865,6 @@ class CallController extends ChangeNotifier {
             localLevel = max(localLevel, level.toDouble());
           }
         }
-        final participant = _participants[entry.key];
         if (participant != null) {
           final speaking = !participant.muted && remoteLevel > _speakingThreshold;
           if (participant.speaking != speaking) {
@@ -783,5 +885,139 @@ class CallController extends ChangeNotifier {
       _polling = false;
     }
     if (changed && !_disposed) notifyListeners();
+  }
+
+  /// Выбранная пара ICE-кандидатов идёт через relay — значит, через TURN.
+  static bool _usesTurn(List<StatsReport> reports) {
+    final byId = {for (final r in reports) r.id: r};
+    String? pairId;
+    for (final r in reports) {
+      if (r.type == 'transport' && r.values['selectedCandidatePairId'] is String) {
+        pairId = r.values['selectedCandidatePairId'] as String;
+      }
+    }
+    final pair = pairId != null
+        ? byId[pairId]
+        : reports.where((r) =>
+            r.type == 'candidate-pair' &&
+            r.values['state'] == 'succeeded' &&
+            (r.values['nominated'] == true || r.values['selected'] == true)).firstOrNull;
+    if (pair == null) return false;
+    bool relay(Object? id) => byId[id]?.values['candidateType'] == 'relay';
+    return relay(pair.values['localCandidateId']) || relay(pair.values['remoteCandidateId']);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Демонстрация экрана (показывать — только Windows, смотреть — везде)
+  // ---------------------------------------------------------------------------
+
+  Future<MediaStream> _screenLabelStream() async =>
+      _screenLabel ??= await createLocalMediaStream('screen-$peerId');
+
+  /// У answerer видеоканал создаётся из offer: разрешаем в нём отправку и
+  /// подписываем своим потоком — до createAnswer, чтобы это попало в answer.
+  Future<void> _adoptVideoChannel(_Peer peer) async {
+    try {
+      for (final t in await peer.pc.getTransceivers()) {
+        if (t.receiver.track?.kind != 'video') continue;
+        await t.setDirection(TransceiverDirection.SendRecv);
+        try {
+          await t.sender.setStreams([await _screenLabelStream()]);
+        } catch (e) {
+          debugPrint('video setStreams failed: $e');
+        }
+        peer.videoSender = t.sender;
+        return;
+      }
+    } catch (e) {
+      debugPrint('video channel failed: $e');
+    }
+  }
+
+  /// Новый участник подключился, пока я показываю экран, — отдаём картинку и ему.
+  Future<void> _attachScreen(String remoteId, _Peer peer) async {
+    final track = _screenCapture?.getVideoTracks().firstOrNull;
+    if (track == null) return;
+    await _sendScreenTo(peer, track);
+    _sendSignal(remoteId, 'screen', {'on': true});
+  }
+
+  Future<void> _sendScreenTo(_Peer peer, MediaStreamTrack? track) async {
+    final sender = peer.videoSender;
+    if (sender == null) return;
+    try {
+      await sender.replaceTrack(track);
+      if (track == null) return;
+      final params = sender.parameters;
+      final encodings = params.encodings;
+      if (encodings == null || encodings.isEmpty) {
+        params.encodings = [RTCRtpEncoding(active: true)];
+      }
+      for (final e in params.encodings!) {
+        e.active = true;
+        e.maxBitrate = _screenQuality.bitrate;
+        e.maxFramerate = _screenQuality.fps;
+      }
+      // Текст на экране важнее плавности.
+      params.degradationPreference = RTCDegradationPreference.MAINTAIN_RESOLUTION;
+      await sender.setParameters(params);
+    } catch (e) {
+      debugPrint('screen to peer failed: $e');
+    }
+  }
+
+  /// Экраны и окна для выбора (только Windows).
+  Future<List<DesktopCapturerSource>> screenSources() => desktopCapturer.getSources(
+        types: [SourceType.Screen, SourceType.Window],
+        thumbnailSize: ThumbnailSize(320, 180),
+      );
+
+  /// Начинает показ выбранного экрана или окна.
+  Future<void> startScreenShare(DesktopCapturerSource source, ScreenQuality quality) async {
+    if (!canShareScreen || status != CallStatus.inRoom) return;
+    await _stopCapture();
+    _screenQuality = quality;
+    final capture = await navigator.mediaDevices.getDisplayMedia({
+      'audio': false,
+      'video': {
+        'deviceId': {'exact': source.id},
+        'mandatory': {'frameRate': quality.fps.toDouble()},
+      },
+    });
+    if (_disposed || !isActive) {
+      for (final t in capture.getTracks()) {
+        await t.stop();
+      }
+      await capture.dispose();
+      return;
+    }
+    _screenCapture = capture;
+    final track = capture.getVideoTracks().firstOrNull;
+    track?.onEnded = () => unawaited(stopScreenShare());
+    for (final entry in _peers.entries.toList()) {
+      await _sendScreenTo(entry.value, track);
+      _sendSignal(entry.key, 'screen', {'on': true});
+    }
+    notifyListeners();
+  }
+
+  Future<void> stopScreenShare() async {
+    if (_screenCapture == null) return;
+    for (final entry in _peers.entries.toList()) {
+      _sendSignal(entry.key, 'screen', {'on': false});
+      await _sendScreenTo(entry.value, null);
+    }
+    await _stopCapture();
+    notifyListeners();
+  }
+
+  Future<void> _stopCapture() async {
+    final capture = _screenCapture;
+    _screenCapture = null;
+    if (capture == null) return;
+    for (final t in capture.getTracks()) {
+      await t.stop();
+    }
+    await capture.dispose();
   }
 }
