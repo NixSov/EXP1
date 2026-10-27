@@ -28,37 +28,6 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   AppState get _app => AppState.instance;
 
-  /// Присылать ли упоминания на почту. null — неизвестно (гость или старая база).
-  bool? _emailMentions;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadEmailMentions();
-  }
-
-  Future<void> _loadEmailMentions() async {
-    final user = _app.db.auth.currentUser;
-    if (user == null || user.isAnonymous || user.email == null) return;
-    try {
-      final value = await _app.db.rpc('get_email_mentions').timeout(const Duration(seconds: 15));
-      if (mounted) setState(() => _emailMentions = value == true);
-    } catch (_) {
-      // База без упоминаний или нет связи — переключатель не показываем.
-    }
-  }
-
-  Future<void> _setEmailMentions(bool value) async {
-    setState(() => _emailMentions = value);
-    try {
-      await _app.db.rpc('set_email_mentions', params: {'p_enabled': value})
-          .timeout(const Duration(seconds: 15));
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _emailMentions = !value);
-      showError(context, describeError(e));
-    }
-  }
 
   Future<void> _changeName() async {
     final user = _app.db.auth.currentUser!;
@@ -389,18 +358,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
             ..._themeSection(context),
             const Divider(),
-            if (_emailMentions != null) ...[
-              const _Header('Уведомления'),
-              SwitchListTile(
-                secondary: const Icon(Icons.alternate_email),
-                title: const Text('Упоминания на почту'),
-                subtitle: Text('Если вас упомянули через @имя, а приложение закрыто — '
-                    'письмо на ${user?.email ?? 'почту'}'),
-                value: _emailMentions!,
-                onChanged: _setEmailMentions,
-              ),
-              const Divider(),
-            ],
             const _Header('Звук'),
             SwitchListTile(
               secondary: const Icon(Icons.noise_aware),

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -339,6 +340,16 @@ class _FullScreenView extends StatefulWidget {
 }
 
 class _FullScreenViewState extends State<_FullScreenView> {
+  bool _landscape = false;
+
+  /// Экран компьютера широкий — на телефоне удобнее смотреть боком.
+  void _rotate() {
+    setState(() => _landscape = !_landscape);
+    SystemChrome.setPreferredOrientations(_landscape
+        ? const [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]
+        : const []);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -359,6 +370,7 @@ class _FullScreenViewState extends State<_FullScreenView> {
   void dispose() {
     widget.call.removeListener(_onCall);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    if (_landscape) SystemChrome.setPreferredOrientations(const []);
     super.dispose();
   }
 
@@ -366,7 +378,9 @@ class _FullScreenViewState extends State<_FullScreenView> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.black,
+      // StackFit.expand: иначе размер задаёт полоса с кнопками и видео сжимается в неё.
       body: Stack(
+        fit: StackFit.expand,
         children: [
           Positioned.fill(
             child: InteractiveViewer(
@@ -374,19 +388,31 @@ class _FullScreenViewState extends State<_FullScreenView> {
               child: RTCVideoView(widget.renderer),
             ),
           ),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Row(
-                children: [
-                  IconButton.filledTonal(
-                    tooltip: 'Свернуть',
-                    onPressed: () => Navigator.pop(context),
-                    icon: const Icon(Icons.fullscreen_exit),
-                  ),
-                  const SizedBox(width: 8),
-                  Text('Экран: ${widget.sharer.name}', style: const TextStyle(color: Colors.white)),
-                ],
+          Align(
+            alignment: Alignment.topLeft,
+            child: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(8),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton.filledTonal(
+                      tooltip: 'Свернуть',
+                      onPressed: () => Navigator.pop(context),
+                      icon: const Icon(Icons.fullscreen_exit),
+                    ),
+                    if (Platform.isAndroid || Platform.isIOS) ...[
+                      const SizedBox(width: 8),
+                      IconButton.filledTonal(
+                        tooltip: _landscape ? 'Вертикально' : 'Повернуть боком',
+                        onPressed: _rotate,
+                        icon: const Icon(Icons.screen_rotation),
+                      ),
+                    ],
+                    const SizedBox(width: 8),
+                    Text('Экран: ${widget.sharer.name}', style: const TextStyle(color: Colors.white)),
+                  ],
+                ),
               ),
             ),
           ),

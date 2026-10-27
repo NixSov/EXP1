@@ -30,14 +30,14 @@ class MentionNotice {
   String get title => '$fromName упоминает вас в «$roomName»';
 }
 
-/// Пока приложение запущено (открыто или свёрнуто), раз в 30 секунд спрашивает
+/// Пока приложение запущено (открыто или свёрнуто), раз в 2 минуты спрашивает
 /// сервер о новых упоминаниях и показывает уведомление: системное на Android,
-/// мигание на панели задач Windows и плашку внутри приложения.
-/// Упоминания, которые никто не забрал за 90 секунд, сервер отправит письмом.
+/// мигание на панели задач Windows и плашку внутри приложения. Реже нельзя
+/// сделать незаметным, чаще — посредник на Deno не выключается и тратит лимит.
 class MentionWatcher {
   MentionWatcher._();
 
-  static const _interval = Duration(seconds: 30);
+  static const _interval = Duration(minutes: 2);
 
   static Timer? _timer;
   static bool _serverSupports = true;

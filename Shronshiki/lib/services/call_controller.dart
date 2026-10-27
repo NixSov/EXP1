@@ -128,6 +128,8 @@ class CallController extends ChangeNotifier {
   bool get chatSupported => _signaling?.chatSupported ?? true;
   set chatOpen(bool value) {
     _chatOpen = value;
+    // Открыли чат — сразу забираем новые сообщения и дальше опрашиваем чаще.
+    if (value && status == CallStatus.inRoom) _schedulePoll(Duration.zero);
     if (value && unreadChat != 0) {
       unreadChat = 0;
       notifyListeners();
@@ -160,12 +162,15 @@ class CallController extends ChangeNotifier {
   /// Сколько пытаемся войти в комнату, прежде чем показать ошибку.
   static const _connectLimit = Duration(seconds: 30);
 
-  /// Как часто опрашиваем сервер: чаще, пока соединения устанавливаются.
+  /// Как часто опрашиваем сервер: часто, пока соединения устанавливаются; когда
+  /// все соединились, звук идёт напрямую и сервер нужен только для чата, значков
+  /// и новых участников — опрашиваем редко, чтобы не тратить лимиты посредника.
   static const _fastPoll = Duration(milliseconds: 1000);
-  static const _slowPoll = Duration(milliseconds: 2000);
+  static const _chatPoll = Duration(milliseconds: 2000);
+  static const _slowPoll = Duration(milliseconds: 5000);
 
   /// Нет ответа от сервера дольше этого — показываем предупреждение.
-  static const _serverLostAfter = Duration(seconds: 8);
+  static const _serverLostAfter = Duration(seconds: 14);
   bool _disposed = false;
   bool _reconnecting = false;
   int? _joinedAtValue;
@@ -334,7 +339,9 @@ class CallController extends ChangeNotifier {
       _schedulePoll(Duration.zero);
     } else {
       final settling = _participants.values.any((p) => !p.connected);
-      _schedulePoll(settling || status == CallStatus.connecting ? _fastPoll : _slowPoll);
+      _schedulePoll(settling || status == CallStatus.connecting
+          ? _fastPoll
+          : (_chatOpen ? _chatPoll : _slowPoll));
     }
   }
 
