@@ -6,7 +6,9 @@ import '../services/rooms.dart';
 import '../services/call_controller.dart';
 import '../services/call_session.dart';
 import '../services/mentions.dart';
+import '../services/updater.dart';
 import '../widgets/active_call_banner.dart';
+import '../widgets/app_update.dart';
 import 'errors.dart';
 import 'room_screen.dart';
 import 'settings_screen.dart';
@@ -37,6 +39,13 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _onInvite());
     // Упоминания в чатах комнат, пока приложение запущено.
     MentionWatcher.start();
+    // Новая версия на GitHub — покажем плашку. Ошибки сети здесь не важны.
+    if (Updater.supported && Updater.available.value == null) {
+      Updater.check().catchError((Object e) {
+        debugPrint('update check failed: $e');
+        return null;
+      });
+    }
   }
 
   @override
@@ -260,6 +269,7 @@ class _HomeScreenState extends State<HomeScreen> {
             Text('Привет, ${user.displayName}!', style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 16),
             ActiveCallBanner(onOpen: _showCall),
+            const UpdateBanner(),
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),

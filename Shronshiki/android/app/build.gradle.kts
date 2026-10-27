@@ -28,10 +28,24 @@ android {
         versionName = flutter.versionName
     }
 
+    // Ключ выпусков на GitHub: CI кладёт его во временный файл и передаёт путь в
+    // SHRONSHIKI_KEYSTORE. Локальные сборки подписываются debug-ключом.
+    val releaseStore = System.getenv("SHRONSHIKI_KEYSTORE")
+    signingConfigs {
+        if (!releaseStore.isNullOrEmpty()) {
+            create("shronshiki") {
+                storeFile = file(releaseStore)
+                storePassword = System.getenv("SHRONSHIKI_STORE_PASSWORD") ?: "android"
+                keyAlias = System.getenv("SHRONSHIKI_KEY_ALIAS") ?: "androiddebugkey"
+                keyPassword = System.getenv("SHRONSHIKI_STORE_PASSWORD") ?: "android"
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // APK ставится напрямую на телефон, поэтому подписываем debug-ключом.
-            signingConfig = signingConfigs.getByName("debug")
+            // APK ставится напрямую на телефон, а не через магазин.
+            signingConfig = signingConfigs.findByName("shronshiki") ?: signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }

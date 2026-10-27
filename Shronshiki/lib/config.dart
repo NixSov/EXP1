@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Настройки подключения к серверам.
@@ -60,7 +62,10 @@ class AppConfig {
     final prefs = await SharedPreferences.getInstance();
     String pick(String key, String fallback) {
       final stored = prefs.getString(key);
-      return (stored != null && stored.trim().isNotEmpty) ? stored.trim() : fallback;
+      if (stored != null && stored.trim().isNotEmpty) return stored.trim();
+      // Запоминаем вшитое при сборке: обновление с GitHub может прийти без него.
+      if (fallback.isNotEmpty) unawaited(prefs.setString(key, fallback));
+      return fallback;
     }
 
     return AppConfig(

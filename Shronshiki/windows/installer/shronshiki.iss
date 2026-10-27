@@ -1,5 +1,5 @@
 ; Shronshiki installer for Windows (Inno Setup 6).
-; Built by .github/workflows/shronshiki-windows.yml after `flutter build windows`.
+; Built by .github/workflows/shronshiki-release.yml after `flutter build windows`.
 ; Installs per user (no admin rights), adds shortcuts and registers the
 ; shronshiki:// link scheme so room invites open in the app.
 
@@ -47,3 +47,5 @@ Root: HKCU; Subkey: "Software\Classes\shronshiki\shell\open\command"; ValueType:
 
 [Run]
 Filename: "{app}\shronshiki.exe"; Description: "{cm:LaunchProgram,Shronshiki}"; Flags: nowait postinstall skipifsilent
+; Update from inside the app runs the installer with /VERYSILENT: start the new version afterwards.
+Filename: "{app}\shronshiki.exe"; Flags: nowait; Check: WizardSilent

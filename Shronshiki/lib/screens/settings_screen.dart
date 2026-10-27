@@ -15,6 +15,8 @@ import '../services/theme_settings.dart';
 import '../widgets/color_picker_dialog.dart';
 import 'errors.dart';
 import 'setup_screen.dart';
+import '../services/updater.dart';
+import '../widgets/app_update.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -469,6 +471,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ],
             ),
+            if (Updater.supported) ...[
+              const Divider(),
+              const _Header('Обновления'),
+              const UpdateTile(),
+            ],
             const Divider(),
             if (user != null)
               ListTile(

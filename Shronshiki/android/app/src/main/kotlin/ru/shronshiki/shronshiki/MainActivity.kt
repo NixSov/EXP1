@@ -65,6 +65,15 @@ class MainActivity : FlutterActivity() {
                     )
                     result.success(null)
                 }
+                "abi" -> result.success(AppUpdater.abi)
+                "installApk" -> {
+                    try {
+                        AppUpdater.install(this, call.argument<String>("path") ?: "")
+                        result.success(null)
+                    } catch (e: Exception) {
+                        result.error("install", e.message, null)
+                    }
+                }
                 "moveToBack" -> {
                     // «Назад» на главном экране во время звонка сворачивает приложение, а не закрывает.
                     moveTaskToBack(true)
