@@ -20,6 +20,7 @@
    - [`supabase/migrations/20261026150000_polling_signaling.sql`](supabase/migrations/20261026150000_polling_signaling.sql) — участники и сигналинг.
    - [`supabase/migrations/20261026190000_room_chat.sql`](supabase/migrations/20261026190000_room_chat.sql) — чат комнаты.
    - [`supabase/migrations/20261026210000_mentions.sql`](supabase/migrations/20261026210000_mentions.sql) — упоминания @имя.
+   - [`supabase/migrations/20261028090000_ice_servers.sql`](supabase/migrations/20261028090000_ice_servers.sql) — TURN-серверы для всех (см. ниже).
    Файл можно запускать повторно — он ничего не сломает.
 3. **Authentication → Sign In / Providers**:
    - включите **Allow anonymous sign-ins** (нужно для гостей);
@@ -36,6 +37,20 @@
 1. Зарегистрируйтесь на [metered.ca](https://www.metered.ca/tools/openrelay/) (бесплатный план, карта не нужна).
 2. Создайте TURN-приложение и откройте его учётные данные: список адресов
    (`turn:...:80`, `turn:...:443?transport=tcp`, …), **username** и **credential**.
+
+Удобнее хранить TURN на сервере: после миграции `ice_servers` добавьте его в **SQL Editor** —
+приложение и сайт получат его после входа, на телефонах ничего вписывать не нужно. Серверов
+можно добавить несколько (например, [ExpressTURN](https://expressturn.com/) — 1000 ГБ в месяц
+бесплатно, и [Open Relay](https://www.metered.ca/tools/openrelay/) — 20 ГБ, порты 80/443):
+
+```sql
+insert into public.ice_servers (name, urls, username, credential) values (
+  'ExpressTURN',
+  'turn:free.expressturn.com:3478?transport=udp,turn:free.expressturn.com:3478?transport=tcp',
+  'ИМЯ_ПОЛЬЗОВАТЕЛЯ', 'ПАРОЛЬ');
+```
+
+Проверить: **Настройки → Проверить прямое соединение** — по строке на каждый TURN.
 
 ### 3. Файл настроек
 

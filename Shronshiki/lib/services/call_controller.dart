@@ -10,6 +10,7 @@ import '../config.dart';
 import 'rooms.dart';
 import 'settings.dart';
 import 'signaling.dart';
+import 'ice_servers.dart';
 
 enum CallStatus { connecting, inRoom, full, failed, ended }
 
@@ -262,6 +263,9 @@ class CallController extends ChangeNotifier {
 
     if (_joinedAtValue == null) {
       _joinedAtValue = DateTime.now().millisecondsSinceEpoch;
+      // Свежий список TURN с сервера; не ответил — останется сохранённый.
+      await ServerIce.refresh(_db);
+      if (_disposed) return;
       navigator.mediaDevices.ondevicechange = (_) => unawaited(refreshDevices());
       await refreshDevices(initial: true);
     }
@@ -508,7 +512,7 @@ class CallController extends ChangeNotifier {
 
   Future<_Peer> _createPeer(String remoteId, {required bool initiator}) async {
     final pc = await createPeerConnection({
-      'iceServers': config.iceServers,
+      'iceServers': [...config.iceServers, ...ServerIce.iceServers],
       'sdpSemantics': 'unified-plan',
     });
     final peer = _Peer(pc, initiator);

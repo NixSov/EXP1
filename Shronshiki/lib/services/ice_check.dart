@@ -5,6 +5,7 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../app_state.dart';
 import '../config.dart';
 import 'diagnostics.dart';
+import 'ice_servers.dart';
 
 /// Проверка прямого соединения: какие STUN-серверы сообщают телефону его
 /// внешний адрес и работает ли TURN. Без внешнего адреса телефоны за NAT
@@ -30,14 +31,22 @@ class IceCheck {
     }
 
     final config = AppState.instance.config;
-    if (config.hasTurn) {
-      final types = await _gather([
-        {'urls': config.turnUrls, 'username': config.turnUsername, 'credential': config.turnCredential},
-      ], relayOnly: true);
+    await ServerIce.refresh(AppState.instance.db);
+    final turns = [
+      if (config.hasTurn)
+        (
+          name: 'TURN (из настроек)',
+          ice: {'urls': config.turnUrls, 'username': config.turnUsername, 'credential': config.turnCredential},
+        ),
+      for (final s in ServerIce.servers) (name: 'TURN ${s.name} (с сервера)', ice: s.toIce()),
+    ];
+    for (final turn in turns) {
+      final types = await _gather([turn.ice], relayOnly: true);
       final ok = types.contains('relay');
-      add(DiagResult('TURN', ok: ok, detail: ok ? 'работает' : 'не отвечает или неверный логин/пароль'));
-    } else {
-      add(DiagResult('TURN', ok: false, detail: 'не настроен (Настройки → Сервер → Supabase и TURN)'));
+      add(DiagResult(turn.name, ok: ok, detail: ok ? 'работает' : 'не отвечает или неверный логин/пароль'));
+    }
+    if (turns.isEmpty) {
+      add(DiagResult('TURN', ok: false, detail: 'не настроен: добавьте на сервере (ice_servers) или в настройках'));
     }
     return results;
   }

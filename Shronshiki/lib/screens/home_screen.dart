@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -5,6 +7,7 @@ import '../app_state.dart';
 import '../services/rooms.dart';
 import '../services/call_controller.dart';
 import '../services/call_session.dart';
+import '../services/ice_servers.dart';
 import '../services/mentions.dart';
 import '../services/updater.dart';
 import '../widgets/active_call_banner.dart';
@@ -39,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _onInvite());
     // Упоминания в чатах комнат, пока приложение запущено.
     MentionWatcher.start();
+    unawaited(ServerIce.refresh(_app.db));
     // Новая версия на GitHub — покажем плашку. Ошибки сети здесь не важны.
     if (Updater.supported && Updater.available.value == null) {
       Updater.check().catchError((Object e) {

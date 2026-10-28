@@ -9,6 +9,7 @@ import 'services/rooms.dart';
 import 'services/server_route.dart';
 import 'services/settings.dart';
 import 'services/theme_settings.dart';
+import 'services/ice_servers.dart';
 
 /// Общие объекты приложения.
 class AppState {
@@ -38,6 +39,7 @@ class AppState {
       await ThemeSettings.load(),
     );
     instance = state;
+    await ServerIce.loadCached();
     if (state.config.isConfigured) await state.initSupabase();
     state._listenLinks();
     return state;
