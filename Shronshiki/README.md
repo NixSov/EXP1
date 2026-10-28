@@ -88,6 +88,21 @@ cd Shronshiki
 (и [`../dist/Shronshiki-armv7.apk`](../dist/Shronshiki-armv7.apk) для старых телефонов):
 установите её, при первом запуске введите адрес и ключ Supabase.
 
+## Сайт (вход из браузера)
+
+Веб-версия из того же кода публикуется на **https://nixsov.github.io/EXP1/** (ветка `gh-pages`,
+собирает тот же workflow). Нужна iPhone и всем, кто не хочет ставить приложение: приглашение
+`https://nixsov.github.io/EXP1/#/join/КОД` сразу открывает вход гостем в комнату.
+
+- Работают комнаты, чат, вход по коду, выбор микрофона и вывода, просмотр демонстрации экрана;
+  с компьютера (Chrome, Edge, Firefox) можно и показывать экран.
+- TURN сайт получает с сервера после входа (таблица `ice_servers`), в код сайта он не попадает.
+- Ограничения браузера: вкладка должна быть открыта (на iPhone при блокировке экрана Safari
+  выключает микрофон), нет кнопки наушников и обновлений.
+- Включить один раз: **Settings → Pages → Deploy from a branch → `gh-pages` / (root)**, и задать
+  секреты `SHRONSHIKI_SUPABASE_URL`, `SHRONSHIKI_SUPABASE_ANON_KEY`, `SHRONSHIKI_PROXY_URL`.
+- Посредник отвечает браузеру с заголовками CORS.
+
 ## Обновления
 
 Каждый push в ветку собирает в GitHub Actions ([`shronshiki-release.yml`](../.github/workflows/shronshiki-release.yml))

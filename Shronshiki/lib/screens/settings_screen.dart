@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -186,7 +187,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Image.file(File(theme.imagePath!), width: 40, height: 40, fit: BoxFit.cover),
                 )
               : swatch(theme.background),
-          onTap: _chooseBackground,
+          onTap: kIsWeb
+              ? () async {
+                  final color = await showColorPickerDialog(context, title: 'Цвет фона', initial: theme.background);
+                  if (color != null) theme.background = color;
+                }
+              : _chooseBackground,
         ),
         if (theme.imagePath != null)
           Padding(
@@ -395,24 +401,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const Divider(),
             const _Header('Сервер'),
             ..._routeSection(context),
-            ListTile(
-              leading: const Icon(Icons.network_check),
-              title: const Text('Проверить связь с сервером'),
-              subtitle: const Text('Покажет, мешает ли провайдер (сравните с VPN и без)'),
-              onTap: _runDiagnostics,
-            ),
+            if (!kIsWeb)
+              ListTile(
+                leading: const Icon(Icons.network_check),
+                title: const Text('Проверить связь с сервером'),
+                subtitle: const Text('Покажет, мешает ли провайдер (сравните с VPN и без)'),
+                onTap: _runDiagnostics,
+              ),
             ListTile(
               leading: const Icon(Icons.swap_horiz),
               title: const Text('Проверить прямое соединение'),
               subtitle: const Text('STUN и TURN: смогут ли телефоны найти друг друга'),
               onTap: _runIceCheck,
             ),
-            ListTile(
-              leading: const Icon(Icons.travel_explore),
-              title: const Text('Проверить площадки'),
-              subtitle: const Text('Google Firebase, Deno Deploy, Netlify — доступны ли без VPN'),
-              onTap: _runPlatformCheck,
-            ),
+            if (!kIsWeb)
+              ListTile(
+                leading: const Icon(Icons.travel_explore),
+                title: const Text('Проверить площадки'),
+                subtitle: const Text('Google Firebase, Deno Deploy, Netlify — доступны ли без VPN'),
+                onTap: _runPlatformCheck,
+              ),
             ExpansionTile(
               leading: const Icon(Icons.dns_outlined),
               title: const Text('Supabase и TURN'),

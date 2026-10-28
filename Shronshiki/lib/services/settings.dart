@@ -32,6 +32,9 @@ class AudioSettings extends ChangeNotifier {
   /// flutter_webrtc читает только `mandatory`/`optional` со старыми именами goog*.
   Map<String, dynamic> audioConstraints() {
     final ns = noiseSuppression;
+    // Браузер понимает только стандартные ключи: старые mandatory/optional
+    // вместе с ними он отвергает целиком.
+    if (kIsWeb) return {'echoCancellation': true, 'noiseSuppression': ns, 'autoGainControl': true};
     return {
       'echoCancellation': true,
       'noiseSuppression': ns,

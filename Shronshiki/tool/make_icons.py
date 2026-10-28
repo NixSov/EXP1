@@ -56,4 +56,13 @@ SRC.save(
     ROOT / "windows/runner/resources/app_icon.ico",
     sizes=[(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)],
 )
+# Иконки сайта: обычные и «maskable» (с полями, чтобы маска не обрезала картинку).
+WEB = ROOT / "web"
+for size in (192, 512):
+    resized(size).save(WEB / f"icons/Icon-{size}.png", optimize=True)
+    canvas = Image.new("RGB", (size, size), BACKGROUND)
+    inner = round(size * 0.8)
+    canvas.paste(resized(inner), ((size - inner) // 2, (size - inner) // 2))
+    canvas.save(WEB / f"icons/Icon-maskable-{size}.png", optimize=True)
+resized(32).save(WEB / "favicon.png", optimize=True)
 print("Иконки обновлены")

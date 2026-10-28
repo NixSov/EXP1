@@ -1,5 +1,8 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Адрес сайта Shronshiki (GitHub Pages).
+const webAppUrl = String.fromEnvironment('WEB_URL', defaultValue: 'https://nixsov.github.io/EXP1/');
+
 class Room {
   Room({
     required this.id,
@@ -25,8 +28,13 @@ class Room {
 
   String get inviteLink => 'shronshiki://join/$code';
 
-  String get inviteText =>
-      'Заходи в голосовую комнату «$name» в Shronshiki.\nКод: $code\n$inviteLink';
+  /// Вход через браузер, без установки (в том числе с iPhone).
+  String get webLink => '$webAppUrl#/join/$code';
+
+  String get inviteText => 'Заходи в голосовую комнату «$name» в Shronshiki.\n'
+      'Код: $code\n'
+      'В браузере: $webLink\n'
+      'В приложении: $inviteLink';
 }
 
 /// Работа с таблицей комнат.

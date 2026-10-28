@@ -79,6 +79,9 @@ class _Peer {
   /// а картинка подключается в него без повторного согласования.
   RTCRtpSender? videoSender;
 
+  /// В браузере чужой голос сам не играет — его воспроизводит этот рендерер.
+  RTCVideoRenderer? audioRenderer;
+
   /// Входящая демонстрация экрана от этого участника.
   MediaStream? remoteVideo;
   String? remoteVideoTrackId;
@@ -202,8 +205,11 @@ class CallController extends ChangeNotifier {
 
   bool get canSwitchSpeaker => _isMobile;
 
-  /// Показывать экран можно только с компьютера (Windows). Смотреть — везде.
-  static bool get canShareScreen => !kIsWeb && Platform.isWindows;
+  /// Показывать экран можно с компьютера: программа для Windows или браузер
+  /// на компьютере. Смотреть — везде.
+  static bool get canShareScreen => kIsWeb
+      ? const {TargetPlatform.windows, TargetPlatform.macOS, TargetPlatform.linux}.contains(defaultTargetPlatform)
+      : Platform.isWindows;
 
   /// Я показываю экран.
   bool get sharingScreen => _screenCapture != null;
@@ -569,9 +575,15 @@ class CallController extends ChangeNotifier {
       }
     };
 
-    // Входящий звук на Android и Windows воспроизводится автоматически.
-    // Видео — это демонстрация экрана, её показывает экран комнаты.
+    // Входящий звук на Android и Windows воспроизводится автоматически,
+    // в браузере — через рендерер. Видео — это демонстрация экрана, её
+    // показывает экран комнаты.
     pc.onTrack = (event) {
+      if (event.track.kind == 'audio') {
+        final stream = event.streams.firstOrNull;
+        if (kIsWeb && stream != null) unawaited(_playInBrowser(peer, stream));
+        return;
+      }
       if (event.track.kind != 'video') return;
       peer.remoteVideo = event.streams.firstOrNull;
       peer.remoteVideoTrackId = event.track.id;
@@ -613,7 +625,28 @@ class CallController extends ChangeNotifier {
     final peer = _peers.remove(remoteId);
     if (peer == null) return;
     peer.restartTimer?.cancel();
+    final renderer = peer.audioRenderer;
+    peer.audioRenderer = null;
+    if (renderer != null) {
+      renderer.srcObject = null;
+      unawaited(renderer.dispose());
+    }
     unawaited(peer.pc.close().catchError((_) {}));
+  }
+
+  Future<void> _playInBrowser(_Peer peer, MediaStream stream) async {
+    final renderer = peer.audioRenderer ?? RTCVideoRenderer();
+    if (peer.audioRenderer == null) {
+      await renderer.initialize();
+      peer.audioRenderer = renderer;
+    }
+    renderer.srcObject = stream;
+    final output = outputId;
+    if (output != null) {
+      try {
+        await renderer.audioOutput(output);
+      } catch (_) {}
+    }
   }
 
   void _sendSignal(String to, String kind, Map<String, dynamic> data) {
@@ -720,7 +753,13 @@ class CallController extends ChangeNotifier {
     if (!_inputChosenByUser) inputId = _inputFor(id) ?? inputId;
     notifyListeners();
     try {
-      await Helper.selectAudioOutput(id);
+      if (kIsWeb) {
+        for (final peer in _peers.values) {
+          await peer.audioRenderer?.audioOutput(id);
+        }
+      } else {
+        await Helper.selectAudioOutput(id);
+      }
     } catch (e) {
       debugPrint('select output failed: $e');
     }
@@ -731,9 +770,33 @@ class CallController extends ChangeNotifier {
     _inputChosenByUser = true;
     notifyListeners();
     try {
-      await Helper.selectAudioInput(id);
+      if (kIsWeb) {
+        await _switchBrowserMic(id);
+      } else {
+        await Helper.selectAudioInput(id);
+      }
     } catch (e) {
       debugPrint('select input failed: $e');
+    }
+  }
+
+  /// В браузере микрофон меняется новым захватом и заменой дорожки у всех.
+  Future<void> _switchBrowserMic(String id) async {
+    final constraints = Map<String, dynamic>.from(settings.audioConstraints());
+    constraints['deviceId'] = {'exact': id};
+    final fresh = await navigator.mediaDevices.getUserMedia({'audio': constraints, 'video': false});
+    final track = fresh.getAudioTracks().firstOrNull;
+    if (track == null || _disposed) return;
+    track.enabled = !muted;
+    for (final peer in _peers.values) {
+      for (final sender in await peer.pc.getSenders()) {
+        if (sender.track?.kind == 'audio') await sender.replaceTrack(track);
+      }
+    }
+    final old = _localStream;
+    _localStream = fresh;
+    for (final t in old?.getTracks() ?? <MediaStreamTrack>[]) {
+      await t.stop();
     }
   }
 
@@ -983,17 +1046,20 @@ class CallController extends ChangeNotifier {
         thumbnailSize: ThumbnailSize(320, 180),
       );
 
-  /// Начинает показ выбранного экрана или окна.
-  Future<void> startScreenShare(DesktopCapturerSource source, ScreenQuality quality) async {
+  /// Начинает показ выбранного экрана или окна. В браузере [source] не нужен:
+  /// экран или окно выбирают в окне самого браузера.
+  Future<void> startScreenShare(DesktopCapturerSource? source, ScreenQuality quality) async {
     if (!canShareScreen || status != CallStatus.inRoom) return;
     await _stopCapture();
     _screenQuality = quality;
     final capture = await navigator.mediaDevices.getDisplayMedia({
       'audio': false,
-      'video': {
-        'deviceId': {'exact': source.id},
-        'mandatory': {'frameRate': quality.fps.toDouble()},
-      },
+      'video': kIsWeb || source == null
+          ? {'frameRate': quality.fps}
+          : {
+              'deviceId': {'exact': source.id},
+              'mandatory': {'frameRate': quality.fps.toDouble()},
+            },
     });
     if (_disposed || !isActive) {
       for (final t in capture.getTracks()) {

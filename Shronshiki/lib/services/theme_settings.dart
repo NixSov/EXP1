@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path_provider/path_provider.dart';
@@ -47,6 +48,8 @@ class ThemeSettings extends ChangeNotifier {
 
   /// Картинка фона (копия в папке приложения). null — фон цветом.
   String? get imagePath {
+    // В браузере файлов нет — только цвет.
+    if (kIsWeb) return null;
     final path = _prefs.getString(_kImage);
     return path != null && File(path).existsSync() ? path : null;
   }

@@ -63,7 +63,11 @@ class AppState {
   }
 
   void _listenLinks() {
-    if (kIsWeb) return;
+    if (kIsWeb) {
+      // Сайт открыли по приглашению …/#/join/КОД — сразу в комнату.
+      pendingJoinCode.value = RoomsRepository.normalizeCode(Uri.base.toString());
+      return;
+    }
     try {
       AppLinks().uriLinkStream.listen((uri) {
         final code = RoomsRepository.normalizeCode(uri.toString());

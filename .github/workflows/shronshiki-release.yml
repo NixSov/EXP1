@@ -2,15 +2,17 @@
 #
 # Каждый push в ветку собирает Windows (установщик + ZIP) и Android (APK) и, если
 # задан ключ подписи, выкладывает их выпуском `shronshiki-b<номер>` в Releases.
+# Сайт (веб-версия) публикуется в ветку gh-pages → https://nixsov.github.io/EXP1/
 # Приложение само находит такой выпуск: Настройки → «Проверить обновления».
 #
 # Секреты (Settings → Secrets and variables → Actions):
 #   SHRONSHIKI_KEY_PASSWORD — пароль от android/app/release.keystore.enc (ключ подписи APK);
 #     без него APK собирается, но выпуск не создаётся;
-#   SHRONSHIKI_SUPABASE_URL, SHRONSHIKI_SUPABASE_ANON_KEY, SHRONSHIKI_PROXY_URL,
+#   SHRONSHIKI_SUPABASE_URL, SHRONSHIKI_SUPABASE_ANON_KEY, SHRONSHIKI_PROXY_URL —
+#     адрес сервера; без них сайт не публикуется, а новая установка приложения
+#     спросит адрес и ключ при первом запуске (при обновлении настройки сохраняются);
 #   SHRONSHIKI_TURN_URLS, SHRONSHIKI_TURN_USERNAME, SHRONSHIKI_TURN_CREDENTIAL —
-#     необязательно: без них новая установка спросит адрес и ключ при первом запуске
-#     (при обновлении настройки сохраняются).
+#     необязательно (TURN лучше хранить на сервере, таблица ice_servers).
 name: Shronshiki
 
 on:
@@ -176,6 +178,61 @@ jobs:
           name: Shronshiki-Android
           path: Shronshiki/build/release/*.apk
           retention-days: 30
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Сайт публикуется в ветку gh-pages → https://nixsov.github.io/EXP1/
+    # (Settings → Pages → Deploy from a branch → gh-pages).
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: Shronshiki
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.8
+          cache: true
+
+      - name: Dependencies
+        run: flutter pub get
+
+      - name: Config from secrets
+        id: config
+        env:
+          SUPABASE_URL: ${{ secrets.SHRONSHIKI_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SHRONSHIKI_SUPABASE_ANON_KEY }}
+          PROXY_URL: ${{ secrets.SHRONSHIKI_PROXY_URL }}
+        run: |
+          mkdir -p config
+          # TURN в сайт не вшиваем: его выдаёт сервер после входа (ice_servers).
+          jq -n 'env | {SUPABASE_URL, SUPABASE_ANON_KEY, PROXY_URL} | map_values(. // "")' > config/app_config.json
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Нет секретов SHRONSHIKI_SUPABASE_URL / SHRONSHIKI_SUPABASE_ANON_KEY — сайт не публикуется"
+          fi
+
+      - name: Build
+        run: |
+          build=$((BUILD_NUMBER + BUILD_OFFSET))
+          flutter build web --release --base-href /EXP1/ --no-web-resources-cdn \
+            --dart-define-from-file=config/app_config.json --dart-define=APP_BUILD=$build
+
+      - name: Publish to GitHub Pages
+        if: steps.config.outputs.ready == 'true' && github.event_name != 'pull_request'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ github.token }}
+          publish_dir: Shronshiki/build/web
+          publish_branch: gh-pages
+          force_orphan: true
+          commit_message: "Shronshiki site, build ${{ github.run_number }}"
 
   release:
     needs: [windows, android]

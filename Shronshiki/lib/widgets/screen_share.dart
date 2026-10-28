@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Platform;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart';
@@ -8,7 +9,8 @@ import 'package:flutter_webrtc/flutter_webrtc.dart';
 import '../services/call_controller.dart';
 
 /// Окно выбора: какой экран или окно показывать и в каком качестве.
-Future<({DesktopCapturerSource source, ScreenQuality quality})?> pickScreenSource(
+/// В браузере экран выбирают в окне самого браузера — здесь только качество.
+Future<({DesktopCapturerSource? source, ScreenQuality quality})?> pickScreenSource(
   BuildContext context,
   CallController call,
 ) {
@@ -37,7 +39,7 @@ class _SourcePickerState extends State<_SourcePicker> {
   @override
   void initState() {
     super.initState();
-    _load();
+    if (!kIsWeb) _load();
   }
 
   Future<void> _load() async {
@@ -83,35 +85,38 @@ class _SourcePickerState extends State<_SourcePicker> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Flexible(
-              child: _error != null
-                  ? Text(_error!)
-                  : sources == null
-                      ? const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(24),
-                            child: CircularProgressIndicator(),
+            if (kIsWeb)
+              const Text('Экран, окно или вкладку выберете в следующем окне браузера.')
+            else
+              Flexible(
+                child: _error != null
+                    ? Text(_error!)
+                    : sources == null
+                        ? const Center(
+                            child: Padding(
+                              padding: EdgeInsets.all(24),
+                              child: CircularProgressIndicator(),
+                            ),
+                          )
+                        : GridView.count(
+                            shrinkWrap: true,
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 8,
+                            crossAxisSpacing: 8,
+                            childAspectRatio: 1.35,
+                            children: [
+                              for (final (i, s) in sources.indexed)
+                                _SourceTile(
+                                  source: s,
+                                  title: s.type == SourceType.Screen
+                                      ? (screens > 1 ? 'Весь экран ${i + 1}' : 'Весь экран')
+                                      : s.name,
+                                  selected: s == _selected,
+                                  onTap: () => setState(() => _selected = s),
+                                ),
+                            ],
                           ),
-                        )
-                      : GridView.count(
-                          shrinkWrap: true,
-                          crossAxisCount: 2,
-                          mainAxisSpacing: 8,
-                          crossAxisSpacing: 8,
-                          childAspectRatio: 1.35,
-                          children: [
-                            for (final (i, s) in sources.indexed)
-                              _SourceTile(
-                                source: s,
-                                title: s.type == SourceType.Screen
-                                    ? (screens > 1 ? 'Весь экран ${i + 1}' : 'Весь экран')
-                                    : s.name,
-                                selected: s == _selected,
-                                onTap: () => setState(() => _selected = s),
-                              ),
-                          ],
-                        ),
-            ),
+              ),
             const SizedBox(height: 16),
             SegmentedButton<ScreenQuality>(
               segments: [
@@ -140,9 +145,9 @@ class _SourcePickerState extends State<_SourcePicker> {
       actions: [
         TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
         FilledButton(
-          onPressed: _selected == null
+          onPressed: _selected == null && !kIsWeb
               ? null
-              : () => Navigator.pop(context, (source: _selected!, quality: _quality)),
+              : () => Navigator.pop(context, (source: _selected, quality: _quality)),
           child: const Text('Показать'),
         ),
       ],
@@ -401,7 +406,7 @@ class _FullScreenViewState extends State<_FullScreenView> {
                       onPressed: () => Navigator.pop(context),
                       icon: const Icon(Icons.fullscreen_exit),
                     ),
-                    if (Platform.isAndroid || Platform.isIOS) ...[
+                    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) ...[
                       const SizedBox(width: 8),
                       IconButton.filledTonal(
                         tooltip: _landscape ? 'Вертикально' : 'Повернуть боком',

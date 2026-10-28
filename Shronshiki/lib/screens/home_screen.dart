@@ -195,7 +195,7 @@ class _HomeScreenState extends State<HomeScreen> {
               style: Theme.of(context).textTheme.displaySmall?.copyWith(letterSpacing: 6),
             ),
             const SizedBox(height: 8),
-            Text(room.inviteLink, style: Theme.of(context).textTheme.bodySmall),
+            Text(room.webLink, style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
         actions: [

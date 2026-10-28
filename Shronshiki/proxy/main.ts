@@ -69,8 +69,25 @@ async function proxyGithub(target: string): Promise<Response> {
   }
 }
 
-Deno.serve(async (req) => {
+// Сайт (GitHub Pages) ходит к посреднику из браузера — нужны заголовки CORS.
+// Ключи передаёт сам клиент, куки не используются, поэтому разрешаем любой сайт.
+function withCors(res: Response, req: Request): Response {
+  const headers = new Headers(res.headers);
+  headers.set("access-control-allow-origin", "*");
+  headers.set("access-control-expose-headers", "content-range, content-length, x-supabase-api-version");
+  if (req.method === "OPTIONS") {
+    headers.set("access-control-allow-methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+    headers.set("access-control-allow-headers", req.headers.get("access-control-request-headers") ?? "*");
+    headers.set("access-control-max-age", "86400");
+  }
+  return new Response(res.body, { status: res.status, headers });
+}
+
+Deno.serve(async (req) => withCors(await handle(req), req));
+
+async function handle(req: Request): Promise<Response> {
   const url = new URL(req.url);
+  if (req.method === "OPTIONS") return new Response(null, { status: 204 });
 
   // Проверка доступности посредника из приложения.
   if (url.pathname === "/health") {
@@ -109,4 +126,4 @@ Deno.serve(async (req) => {
   } catch (e) {
     return new Response(`upstream error: ${e instanceof Error ? e.message : e}`, { status: 502 });
   }
-});
+}

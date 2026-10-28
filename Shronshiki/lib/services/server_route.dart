@@ -1,10 +1,10 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:http/io_client.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+import 'net/platform_http.dart';
 
 /// Как приложение ходит к Supabase.
 enum RouteMode { auto, direct, proxy }
@@ -116,23 +116,7 @@ class ServerRoute extends ChangeNotifier {
     }
   }
 
-  /// Время ответа в мс или null, если не ответил за 5 секунд.
-  static Future<int?> _measure(Uri url) async {
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 5);
-    final sw = Stopwatch()..start();
-    try {
-      final request = await client.getUrl(url).timeout(const Duration(seconds: 5));
-      request.persistentConnection = false;
-      final response = await request.close().timeout(const Duration(seconds: 5));
-      await response.drain<void>().timeout(const Duration(seconds: 5));
-      // 401 на /auth/v1/health без ключа — тоже ответ: сервер доступен.
-      return response.statusCode < 500 ? sw.elapsedMilliseconds : null;
-    } catch (_) {
-      return null;
-    } finally {
-      client.close(force: true);
-    }
-  }
+  static Future<int?> _measure(Uri url) => measureUrl(url);
 
   /// HTTP-клиент для Supabase: выбирает путь для каждого запроса.
   http.Client createClient() => _RoutingClient(this);
@@ -174,7 +158,7 @@ class _RoutingClient extends http.BaseClient {
   _RoutingClient(this._route);
 
   final ServerRoute _route;
-  final http.Client _inner = IOClient(HttpClient()..connectionTimeout = const Duration(seconds: 6));
+  final http.Client _inner = newHttpClient();
   Timer? _reprobe;
 
   @override
@@ -222,11 +206,7 @@ class _RoutingClient extends http.BaseClient {
 
   /// Сеть не пустила запрос (или подвесила его) — пробуем другим путём.
   /// Ответ сервера с ошибкой (4xx/5xx) сюда не попадает: это не сетевая проблема.
-  static bool _isConnectionProblem(Object e) =>
-      e is SocketException ||
-      e is TimeoutException ||
-      e is HandshakeException ||
-      e is http.ClientException;
+  static bool _isConnectionProblem(Object e) => isConnectionError(e);
 
   /// Копия запроса с другим адресом (тело повторно отправить можно только у http.Request).
   static http.Request? _copy(http.BaseRequest original, Uri url) {
