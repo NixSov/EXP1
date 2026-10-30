@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <!-- Заменяется значением --base-href при сборке (сайт живёт в /EXP1/). -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="Shronshiki — голосовые комнаты до 4 человек. Вход по коду прямо из браузера.">
+  <meta name="theme-color" content="#3A3326">
+
+  <!-- iPhone: можно «добавить на экран Домой» -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="Shronshiki">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>Shronshiki</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    html, body { margin: 0; height: 100%; background: #121212; }
+    #loading {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 16px;
+      color: #cfd8cf; font: 16px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    #loading img { width: 96px; height: 96px; border-radius: 22px; }
+  </style>
+</head>
+<body>
+  <div id="loading">
+    <img src="icons/Icon-192.png" alt="">
+    <div>Загрузка Shronshiki…</div>
+  </div>
+  <script>
+    {{flutter_js}}
+    {{flutter_build_config}}
+    _flutter.loader.load({
+      onEntrypointLoaded: async function (engineInitializer) {
+        const appRunner = await engineInitializer.initializeEngine();
+        document.getElementById('loading')?.remove();
+        await appRunner.runApp();
+      },
+    });
+  </script>
+</body>
+</html>
