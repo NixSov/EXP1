@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -245,16 +246,21 @@ class _RoutingClient extends http.BaseClient {
     for (var i = 0; i < paths.length; i++) {
       final via = paths[i];
       final last = i == paths.length - 1;
-      final attempt = _copy(request, via == null ? request.url : _route._toProxy(request.url, via));
+      final envelope = via != null && _isEnvelopeProxy(via);
+      final attempt = _copy(request, via == null || envelope ? request.url : _route._toProxy(request.url, via));
+      // Посреднику на Apps Script запрос нужно упаковать — без копии не получится.
+      if (envelope && attempt == null) continue;
       // Тело повторно отправить можно только у http.Request — иначе одна попытка.
       final canRetry = attempt != null && !last;
       if (via != null) UsageMeter.countProxyRequest();
       final sw = Stopwatch()..start();
       try {
-        var sending = _inner.send(attempt ?? (request..persistentConnection = false));
-        // Провайдер может не рвать соединение, а «подвешивать» его. Ждать 20 секунд
-        // не будем: через 6 секунд повторим запрос другим путём.
-        if (via == null && canRetry) sending = sending.timeout(const Duration(seconds: 6));
+        var sending = envelope
+            ? _sendEnvelope(attempt!, via)
+            : _inner.send(attempt ?? (request..persistentConnection = false));
+        // Провайдер может не рвать соединение, а «подвешивать» его. Долго не ждём:
+        // напрямую — 6 секунд, через посредника — 15, потом пробуем другой путь.
+        if (canRetry) sending = sending.timeout(Duration(seconds: via == null ? 6 : 15));
         final response = await sending;
         if (via != null && _proxyDown(response) && canRetry) {
           // Посредник не работает (приостановлен за лимиты, ошибка шлюза) — дальше.
@@ -278,6 +284,53 @@ class _RoutingClient extends http.BaseClient {
       }
     }
     throw StateError('no route to server');
+  }
+
+  /// Посредник на Google Apps Script: он не видит заголовков запроса, поэтому
+  /// запрос едет упакованным в JSON (см. proxy/apps_script_proxy.gs).
+  static bool _isEnvelopeProxy(Uri proxy) => proxy.path.contains('/macros/s/');
+
+  Future<http.StreamedResponse> _sendEnvelope(http.Request request, Uri proxy) async {
+    final envelope = jsonEncode({
+      'm': request.method,
+      'p': request.url.path,
+      'q': request.url.hasQuery ? request.url.query : null,
+      'h': {for (final e in request.headers.entries) e.key.toLowerCase(): e.value},
+      'b': request.bodyBytes.isEmpty ? null : utf8.decode(request.bodyBytes, allowMalformed: true),
+    });
+    // text/plain — чтобы браузер не делал предварительный CORS-запрос.
+    final post = http.Request('POST', proxy)
+      ..headers['content-type'] = 'text/plain;charset=utf-8'
+      ..body = envelope
+      ..followRedirects = false
+      ..persistentConnection = false;
+    var response = await _inner.send(post).timeout(const Duration(seconds: 25));
+    var body = await response.stream.bytesToString();
+    // Google отвечает перенаправлением на script.googleusercontent.com, где лежит
+    // результат; браузер проходит его сам, на телефоне и ПК — вручную.
+    final location = response.headers['location'];
+    if (location != null && response.statusCode >= 300 && response.statusCode < 400) {
+      final get = http.Request('GET', Uri.parse(location))..persistentConnection = false;
+      response = await _inner.send(get).timeout(const Duration(seconds: 25));
+      body = await response.stream.bytesToString();
+    }
+    final Map<String, dynamic> reply;
+    try {
+      reply = Map<String, dynamic>.from(jsonDecode(body) as Map);
+    } catch (_) {
+      // Страница ошибки Google (лимит, сбой) вместо ответа — посредник не работает.
+      throw http.ClientException('Apps Script ответил не JSON (${response.statusCode})', proxy);
+    }
+    final bytes = utf8.encode(reply['b'] as String? ?? '');
+    return http.StreamedResponse(
+      Stream.value(bytes),
+      (reply['s'] as num?)?.toInt() ?? 502,
+      contentLength: bytes.length,
+      headers: {
+        for (final e in Map<String, dynamic>.from(reply['h'] as Map? ?? const {}).entries) e.key: '${e.value}',
+      },
+      request: request,
+    );
   }
 
   /// Ответ самого посредника или его площадки, а не Supabase: приложение
