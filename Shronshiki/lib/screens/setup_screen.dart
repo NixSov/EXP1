@@ -136,8 +136,8 @@ class _ServerConfigFormState extends State<ServerConfigForm> {
             keyboardType: TextInputType.url,
             decoration: const InputDecoration(
               labelText: 'Посредник (необязательно)',
-              hintText: 'https://shronshiki.….deno.dev',
-              helperText: 'Если supabase.co недоступен без VPN',
+              hintText: 'https://….vercel.app/api',
+              helperText: 'Если supabase.co недоступен без VPN. Можно несколько через запятую',
               border: OutlineInputBorder(),
             ),
             validator: (v) {

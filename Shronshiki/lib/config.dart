@@ -74,8 +74,20 @@ class AppConfig {
       turnUrls: splitUrls(pick(_kTurnUrls, const String.fromEnvironment('TURN_URLS'))),
       turnUsername: pick(_kTurnUser, const String.fromEnvironment('TURN_USERNAME')),
       turnCredential: pick(_kTurnPass, const String.fromEnvironment('TURN_CREDENTIAL')),
-      proxyUrl: pick(_kProxy, const String.fromEnvironment('PROXY_URL')),
+      proxyUrl: _mergeProxies(prefs.getString(_kProxy), const String.fromEnvironment('PROXY_URL')),
     );
+  }
+
+  /// Посредники из сохранённых настроек и вшитые в сборку — вместе: новая версия
+  /// может принести нового посредника, а вписанный вручную не потеряется.
+  static String _mergeProxies(String? stored, String built) {
+    final all = <String>{};
+    for (final raw in [stored ?? '', built]) {
+      for (final url in splitUrls(raw)) {
+        all.add(url.replaceAll(RegExp(r'/+$'), ''));
+      }
+    }
+    return all.join(',');
   }
 
   static List<String> splitUrls(String raw) => raw

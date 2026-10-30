@@ -49,7 +49,8 @@ class Updater {
   static final available = ValueNotifier<AppUpdate?>(null);
 
   static String get _proxy {
-    final url = AppState.instance.config.proxyUrl.trim();
+    // Посредник, который сейчас отвечает быстрее всех.
+    final url = AppState.instance.supabaseReady ? '${AppState.instance.route.proxyUrl ?? ''}' : '';
     return url.endsWith('/') ? url.substring(0, url.length - 1) : url;
   }
 

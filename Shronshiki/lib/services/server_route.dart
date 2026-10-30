@@ -9,16 +9,20 @@ import 'net/platform_http.dart';
 /// Как приложение ходит к Supabase.
 enum RouteMode { auto, direct, proxy }
 
-/// Выбор пути к Supabase: напрямую или через посредника (Deno Deploy).
+/// Выбор пути к Supabase: напрямую или через посредника (Vercel, Deno Deploy).
 ///
 /// У части провайдеров supabase.co недоступен или отвечает по 5–10 секунд,
-/// у других — работает лучше посредника. В режиме «Авто» приложение меряет оба
-/// пути, ходит более быстрым и переключается на ходу, если путь перестал работать.
+/// у других — работает лучше посредника. В режиме «Авто» приложение меряет
+/// прямой путь и всех посредников, ходит самым быстрым и переключается на ходу,
+/// если путь перестал работать. Посредников несколько — на случай, если у одного
+/// кончился лимит бесплатного тарифа или его заблокировали.
 class ServerRoute extends ChangeNotifier {
-  ServerRoute._(this._prefs, {required this.supabaseUrl, required this.proxyUrl});
+  ServerRoute._(this._prefs, {required this.supabaseUrl, required this.proxies})
+      : _proxy = proxies.firstOrNull;
 
   static const _kMode = 'route_mode';
   static const _kLastProxy = 'route_last_proxy';
+  static const _kLastProxyUrl = 'route_last_proxy_url';
 
   /// Прямой путь медленнее этого — считаем плохим.
   static const _slow = Duration(milliseconds: 2500);
@@ -26,8 +30,12 @@ class ServerRoute extends ChangeNotifier {
   final SharedPreferences _prefs;
   final Uri supabaseUrl;
 
-  /// Адрес посредника; null — посредник не настроен.
-  final Uri? proxyUrl;
+  /// Все посредники из настроек.
+  final List<Uri> proxies;
+
+  /// Посредник, через которого идём сейчас (самый быстрый из ответивших).
+  Uri? _proxy;
+  Uri? get proxyUrl => _proxy;
 
   bool _useProxy = false;
   int? lastDirectMs;
@@ -36,20 +44,28 @@ class ServerRoute extends ChangeNotifier {
   bool _probing = false;
   int _slowDirectInARow = 0;
 
+  /// [proxyUrl] — один адрес или несколько через запятую.
   static Future<ServerRoute> create({required String supabaseUrl, required String proxyUrl}) async {
     final prefs = await SharedPreferences.getInstance();
     final route = ServerRoute._(
       prefs,
       supabaseUrl: Uri.parse(supabaseUrl),
-      proxyUrl: proxyUrl.trim().isEmpty ? null : Uri.parse(proxyUrl.trim().replaceAll(RegExp(r'/+$'), '')),
+      proxies: parseProxies(proxyUrl),
     );
     // Пока не померили — начинаем с пути, который сработал в прошлый раз.
     route._useProxy = route.hasProxy && (prefs.getBool(_kLastProxy) ?? false);
+    final last = prefs.getString(_kLastProxyUrl);
+    route._proxy = route.proxies.where((p) => p.toString() == last).firstOrNull ?? route._proxy;
     route._applyMode();
     return route;
   }
 
-  bool get hasProxy => proxyUrl != null;
+  bool get hasProxy => proxies.isNotEmpty;
+
+  static List<Uri> parseProxies(String raw) => [
+        for (final part in raw.split(RegExp(r'[,\s]+')))
+          if (part.trim().isNotEmpty) Uri.parse(part.trim().replaceAll(RegExp(r'/+$'), '')),
+      ];
 
   RouteMode get mode => RouteMode.values.asNameMap()[_prefs.getString(_kMode)] ?? RouteMode.auto;
   set mode(RouteMode value) {
@@ -78,6 +94,13 @@ class ServerRoute extends ChangeNotifier {
     return ms == null ? how : '$how, $ms мс';
   }
 
+  void _setProxy(Uri value) {
+    if (_proxy == value) return;
+    _proxy = value;
+    _prefs.setString(_kLastProxyUrl, value.toString());
+    debugPrint('server route: proxy $value');
+  }
+
   void _setUseProxy(bool value) {
     if (_useProxy == value) return;
     _useProxy = value;
@@ -97,12 +120,20 @@ class ServerRoute extends ChangeNotifier {
     try {
       final results = await Future.wait([
         _measure(supabaseUrl.replace(path: '/auth/v1/health')),
-        _measure(proxyUrl!.replace(path: '${proxyUrl!.path}/health')),
+        for (final p in proxies) _measure(p.replace(path: '${p.path}/health')),
       ]);
-      lastDirectMs = results[0];
-      lastProxyMs = results[1];
       final direct = results[0];
-      final proxy = results[1];
+      // Самый быстрый из ответивших посредников.
+      int? proxy;
+      for (var i = 0; i < proxies.length; i++) {
+        final ms = results[i + 1];
+        if (ms != null && (proxy == null || ms < proxy)) {
+          proxy = ms;
+          _setProxy(proxies[i]);
+        }
+      }
+      lastDirectMs = direct;
+      lastProxyMs = proxy;
       if (direct != null && direct < _slow.inMilliseconds) {
         // Прямой путь в порядке — он не тратит лимит посредника.
         _setUseProxy(false);
