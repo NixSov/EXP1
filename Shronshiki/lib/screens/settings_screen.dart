@@ -18,6 +18,7 @@ import 'errors.dart';
 import 'setup_screen.dart';
 import '../services/updater.dart';
 import '../widgets/app_update.dart';
+import '../widgets/usage_bar.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -360,6 +361,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 trailing: const Icon(Icons.edit_outlined),
                 onTap: _changeName,
               ),
+              const UsageBar(),
               const Divider(),
             ],
             ..._themeSection(context),

@@ -11,6 +11,7 @@ import 'rooms.dart';
 import 'settings.dart';
 import 'signaling.dart';
 import 'ice_servers.dart';
+import 'usage_meter.dart';
 
 enum CallStatus { connecting, inRoom, full, failed, ended }
 
@@ -78,6 +79,9 @@ class _Peer {
   /// Видеоканал для демонстрации экрана: заводится сразу при соединении,
   /// а картинка подключается в него без повторного согласования.
   RTCRtpSender? videoSender;
+
+  /// Сколько байт уже прошло по выбранной паре кандидатов (для счётчика TURN).
+  int turnBytesSeen = 0;
 
   /// В браузере чужой голос сам не играет — его воспроизводит этот рендерер.
   RTCVideoRenderer? audioRenderer;
@@ -478,6 +482,7 @@ class CallController extends ChangeNotifier {
     }
     status = CallStatus.ended;
     notifyListeners();
+    unawaited(UsageMeter.flush());
     await _teardown();
   }
 
@@ -907,12 +912,14 @@ class CallController extends ChangeNotifier {
   }
 
   bool _polling = false;
+  DateTime? _lastUsageTick;
 
   Future<void> _pollStats() async {
     if (_polling || _disposed) return;
     _polling = true;
     var changed = false;
     var localLevel = 0.0;
+    var ownTurn = false;
     try {
       for (final entry in _peers.entries.toList()) {
         List<StatsReport> reports;
@@ -923,8 +930,17 @@ class CallController extends ChangeNotifier {
         }
         var remoteLevel = 0.0;
         final participant = _participants[entry.key];
+        final pair = _selectedPair(reports);
+        // Трафик через свой TURN (локальный кандидат relay) — в счётчик расхода.
+        // Чужой relay считает тот участник, чтобы не учитывать байты дважды.
+        if (pair != null && pair.localRelay) {
+          ownTurn = true;
+          final delta = pair.bytes - entry.value.turnBytesSeen;
+          if (delta > 0) UsageMeter.addTurnBytes(delta);
+        }
+        if (pair != null) entry.value.turnBytesSeen = pair.bytes;
         if (participant != null) {
-          final turn = _usesTurn(reports);
+          final turn = pair != null && (pair.localRelay || pair.remoteRelay);
           if (participant.viaTurn != turn) {
             participant.viaTurn = turn;
             changed = true;
@@ -955,14 +971,23 @@ class CallController extends ChangeNotifier {
           changed = true;
         }
       }
+      // Время разговора (кто-то ещё на связи) — в счётчик расхода лимитов.
+      final now = DateTime.now();
+      final last = _lastUsageTick;
+      _lastUsageTick = now;
+      final talking = status == CallStatus.inRoom && _participants.values.any((p) => !p.isLocal && p.connected);
+      if (last != null && talking) {
+        UsageMeter.addCallTime(now.difference(last).inMilliseconds.clamp(0, 5000), turn: ownTurn);
+      }
     } finally {
       _polling = false;
     }
     if (changed && !_disposed) notifyListeners();
   }
 
-  /// Выбранная пара ICE-кандидатов идёт через relay — значит, через TURN.
-  static bool _usesTurn(List<StatsReport> reports) {
+  /// Выбранная пара ICE-кандидатов: идёт ли она через relay (TURN) с моей
+  /// стороны или с чужой, и сколько байт по ней прошло.
+  static ({bool localRelay, bool remoteRelay, int bytes})? _selectedPair(List<StatsReport> reports) {
     final byId = {for (final r in reports) r.id: r};
     String? pairId;
     for (final r in reports) {
@@ -976,9 +1001,14 @@ class CallController extends ChangeNotifier {
             r.type == 'candidate-pair' &&
             r.values['state'] == 'succeeded' &&
             (r.values['nominated'] == true || r.values['selected'] == true)).firstOrNull;
-    if (pair == null) return false;
+    if (pair == null) return null;
     bool relay(Object? id) => byId[id]?.values['candidateType'] == 'relay';
-    return relay(pair.values['localCandidateId']) || relay(pair.values['remoteCandidateId']);
+    int count(String key) => (pair.values[key] as num?)?.toInt() ?? 0;
+    return (
+      localRelay: relay(pair.values['localCandidateId']),
+      remoteRelay: relay(pair.values['remoteCandidateId']),
+      bytes: count('bytesSent') + count('bytesReceived'),
+    );
   }
 
   // ---------------------------------------------------------------------------

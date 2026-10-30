@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'net/platform_http.dart';
+import 'usage_meter.dart';
 
 /// Как приложение ходит к Supabase.
 enum RouteMode { auto, direct, proxy }
@@ -209,6 +210,7 @@ class _RoutingClient extends http.BaseClient {
     final viaProxy = _route.usingProxy;
     final auto = _route.mode == RouteMode.auto;
     final first = _copy(request, viaProxy ? _route._toProxy(request.url) : request.url);
+    if (viaProxy) UsageMeter.countProxyRequest();
     final sw = Stopwatch()..start();
     try {
       var sending = _inner.send(first ?? (request..persistentConnection = false));
@@ -231,6 +233,7 @@ class _RoutingClient extends http.BaseClient {
       }
       final retry = _copy(request, viaProxy ? request.url : _route._toProxy(request.url));
       if (retry == null || !auto) rethrow;
+      if (!viaProxy) UsageMeter.countProxyRequest();
       return _inner.send(retry);
     }
   }
