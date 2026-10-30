@@ -418,7 +418,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ListTile(
                 leading: const Icon(Icons.travel_explore),
                 title: const Text('Проверить площадки'),
-                subtitle: const Text('Google Firebase, Deno Deploy, Netlify — доступны ли без VPN'),
+                subtitle: const Text('Где можно разместить посредника: что открывается без VPN'),
                 onTap: _runPlatformCheck,
               ),
             ExpansionTile(

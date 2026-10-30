@@ -36,6 +36,26 @@ class PlatformCheck {
         big: 'https://www.netlify.com/',
         headers: const {},
       ),
+      // Кандидаты для посредника. Адрес несуществующего приложения отвечает 404,
+      // но с тех же серверов, что и настоящие приложения, — этого достаточно.
+      (
+        title: 'Vercel',
+        small: const ['https://shronshiki-check.vercel.app/', 'https://nextjs.org/'],
+        big: 'https://vercel.com/',
+        headers: const {},
+      ),
+      (
+        title: 'Hugging Face Spaces',
+        small: const ['https://shronshiki-check.hf.space/', 'https://huggingface.co/api/spaces?limit=1'],
+        big: 'https://huggingface.co/',
+        headers: const {},
+      ),
+      (
+        title: 'Render (через Cloudflare)',
+        small: const ['https://shronshiki-check.onrender.com/'],
+        big: 'https://render.com/',
+        headers: const {},
+      ),
       (
         title: 'Supabase (для сравнения)',
         small: ['${config.supabaseUrl}/auth/v1/health'],
