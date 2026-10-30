@@ -12,6 +12,7 @@ import '../services/mentions.dart';
 import '../services/updater.dart';
 import '../widgets/active_call_banner.dart';
 import '../widgets/app_update.dart';
+import '../widgets/chats_section.dart';
 import 'errors.dart';
 import 'room_screen.dart';
 import 'settings_screen.dart';
@@ -26,6 +27,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final _code = TextEditingController();
+  final _chatsKey = GlobalKey<ChatsSectionState>();
   List<Room>? _rooms;
   String? _roomsError;
   bool _joining = false;
@@ -266,7 +268,12 @@ class _HomeScreenState extends State<HomeScreen> {
               label: const Text('Создать комнату'),
             ),
       body: RefreshIndicator(
-        onRefresh: _isGuest ? () async {} : _loadRooms,
+        onRefresh: () async {
+          await Future.wait([
+            if (!_isGuest) _loadRooms(),
+            if (_chatsKey.currentState != null) _chatsKey.currentState!.reload(),
+          ]);
+        },
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
           children: [
@@ -312,6 +319,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
             ),
+            ChatsSection(key: _chatsKey),
             const SizedBox(height: 16),
             if (_isGuest) ..._guestInfo(context) else ..._roomsList(context),
           ],

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../services/call_controller.dart';
 import '../services/signaling.dart';
+import 'chat_bubble.dart';
 
 /// Открывает мини-чат комнаты снизу экрана.
 Future<void> showRoomChat(BuildContext context, CallController call) async {
@@ -171,11 +172,13 @@ class _RoomChatState extends State<_RoomChat> {
                           final index = messages.length - 1 - i;
                           final m = messages[index];
                           final previous = index > 0 ? messages[index - 1] : null;
-                          return _Bubble(
-                            message: m,
+                          return ChatBubble(
+                            name: m.name,
+                            body: m.body,
+                            at: m.at,
                             mine: m.peerId == _call.peerId,
                             showName: previous == null || previous.peerId != m.peerId,
-                            mentionsMe: _mentionsMe(m),
+                            highlight: _mentionsMe(m),
                           );
                         },
                       ),
@@ -249,70 +252,6 @@ class _RoomChatState extends State<_RoomChat> {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _Bubble extends StatelessWidget {
-  const _Bubble({
-    required this.message,
-    required this.mine,
-    required this.showName,
-    this.mentionsMe = false,
-  });
-
-  final ChatMessage message;
-  final bool mine;
-  final bool showName;
-
-  /// В сообщении упомянули меня — подсвечиваем рамкой.
-  final bool mentionsMe;
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final time = TimeOfDay.fromDateTime(message.at).format(context);
-    return Padding(
-      padding: EdgeInsets.only(top: showName ? 10 : 3),
-      child: Align(
-        alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.75),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: mine ? scheme.primary : scheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(14),
-              border: mentionsMe ? Border.all(color: scheme.primary, width: 2) : null,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (showName && !mine)
-                    Text(message.name,
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                              color: scheme.primary,
-                              fontWeight: FontWeight.w600,
-                            )),
-                  SelectableText(
-                    message.body,
-                    style: TextStyle(color: mine ? scheme.onPrimary : scheme.onSurface),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    time,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: (mine ? scheme.onPrimary : scheme.onSurface).withValues(alpha: 0.7),
-                        ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
       ),
     );
   }
