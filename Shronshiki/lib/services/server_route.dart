@@ -38,6 +38,15 @@ class ServerRoute extends ChangeNotifier {
   Uri? _proxy;
   Uri? get proxyUrl => _proxy;
 
+  /// Время ответа каждого посредника при последнем замере (null — не ответил).
+  final Map<Uri, int?> proxyMs = {};
+
+  /// Посредники в порядке попыток: сначала текущий, потом остальные.
+  List<Uri> get _proxyOrder => [
+        ?_proxy,
+        ...proxies.where((p) => p != _proxy),
+      ];
+
   bool _useProxy = false;
   int? lastDirectMs;
   int? lastProxyMs;
@@ -91,7 +100,7 @@ class ServerRoute extends ChangeNotifier {
 
   String get description {
     final ms = usingProxy ? lastProxyMs : lastDirectMs;
-    final how = usingProxy ? 'через посредника' : 'напрямую';
+    final how = usingProxy ? 'через посредника ${_proxy?.host ?? ''}' : 'напрямую';
     return ms == null ? how : '$how, $ms мс';
   }
 
@@ -111,8 +120,9 @@ class ServerRoute extends ChangeNotifier {
   }
 
   /// Меряет оба пути и выбирает (в режиме «Авто»). Не чаще раза в 20 секунд.
+  /// В режиме «Посредник» тоже меряем — чтобы выбрать живого посредника.
   Future<void> probe({bool force = false}) async {
-    if (mode != RouteMode.auto || !hasProxy || _probing) return;
+    if (mode == RouteMode.direct || !hasProxy || _probing) return;
     if (!force && _lastProbe != null && DateTime.now().difference(_lastProbe!) < const Duration(seconds: 20)) {
       return;
     }
@@ -128,6 +138,7 @@ class ServerRoute extends ChangeNotifier {
       int? proxy;
       for (var i = 0; i < proxies.length; i++) {
         final ms = results[i + 1];
+        proxyMs[proxies[i]] = ms;
         if (ms != null && (proxy == null || ms < proxy)) {
           proxy = ms;
           _setProxy(proxies[i]);
@@ -135,7 +146,9 @@ class ServerRoute extends ChangeNotifier {
       }
       lastDirectMs = direct;
       lastProxyMs = proxy;
-      if (direct != null && direct < _slow.inMilliseconds) {
+      if (mode != RouteMode.auto) {
+        // «Посредник»: прямой путь не используем, только выбрали посредника.
+      } else if (direct != null && direct < _slow.inMilliseconds) {
         // Прямой путь в порядке — он не тратит лимит посредника.
         _setUseProxy(false);
       } else if (proxy != null) {
@@ -153,12 +166,17 @@ class ServerRoute extends ChangeNotifier {
   /// HTTP-клиент для Supabase: выбирает путь для каждого запроса.
   http.Client createClient() => _RoutingClient(this);
 
-  Uri _toProxy(Uri url) => url.replace(
-        scheme: proxyUrl!.scheme,
-        host: proxyUrl!.host,
-        port: proxyUrl!.hasPort ? proxyUrl!.port : null,
-        path: '${proxyUrl!.path}${url.path}',
-      );
+  Uri _toProxy(Uri url, [Uri? proxy]) {
+    final p = proxy ?? proxyUrl!;
+    // Собираем адрес заново: replace(port: null) оставил бы порт исходного адреса.
+    return Uri(
+      scheme: p.scheme,
+      host: p.host,
+      port: p.hasPort ? p.port : null,
+      path: '${p.path}${url.path}',
+      query: url.hasQuery ? url.query : null,
+    );
+  }
 
   bool _isSupabase(Uri url) => url.host == supabaseUrl.host;
 
@@ -177,9 +195,19 @@ class ServerRoute extends ChangeNotifier {
     }
   }
 
-  void _reportProxy({required bool failed}) {
-    // Посредник тоже не отвечает — пробуем снова оба пути.
-    if (failed) unawaited(probe(force: true));
+  /// Посредник не ответил — переходим на следующего и перемеряем всех.
+  void _proxyFailed(Uri proxy) {
+    proxyMs[proxy] = null;
+    if (proxy == _proxy && proxies.length > 1) {
+      _setProxy(proxies[(proxies.indexOf(proxy) + 1) % proxies.length]);
+    }
+    unawaited(probe());
+  }
+
+  /// Запрос прошёл через посредника — дальше ходим через него.
+  void _proxyWorked(Uri proxy) {
+    _setProxy(proxy);
+    if (!_useProxy && mode != RouteMode.direct) _setUseProxy(true);
   }
 }
 
@@ -207,36 +235,59 @@ class _RoutingClient extends http.BaseClient {
       });
     }
 
-    final viaProxy = _route.usingProxy;
     final auto = _route.mode == RouteMode.auto;
-    final first = _copy(request, viaProxy ? _route._toProxy(request.url) : request.url);
-    if (viaProxy) UsageMeter.countProxyRequest();
-    final sw = Stopwatch()..start();
-    try {
-      var sending = _inner.send(first ?? (request..persistentConnection = false));
-      // Провайдер может не рвать соединение, а «подвешивать» его. Ждать 20 секунд
-      // не будем: через 6 секунд повторим запрос через посредника.
-      if (!viaProxy && auto) sending = sending.timeout(const Duration(seconds: 6));
-      final response = await sending;
-      if (viaProxy) {
-        _route._reportProxy(failed: response.statusCode == 502);
-      } else {
-        _route._reportDirect(failed: false, ms: sw.elapsedMilliseconds);
+    // Пути по порядку попыток: выбранный, потом остальные посредники, потом
+    // (в «Авто») другой путь. null — напрямую.
+    final proxies = _route._proxyOrder;
+    final paths = <Uri?>[
+      if (_route.usingProxy) ...[...proxies, if (auto) null] else ...[null, if (auto) ...proxies],
+    ];
+    for (var i = 0; i < paths.length; i++) {
+      final via = paths[i];
+      final last = i == paths.length - 1;
+      final attempt = _copy(request, via == null ? request.url : _route._toProxy(request.url, via));
+      // Тело повторно отправить можно только у http.Request — иначе одна попытка.
+      final canRetry = attempt != null && !last;
+      if (via != null) UsageMeter.countProxyRequest();
+      final sw = Stopwatch()..start();
+      try {
+        var sending = _inner.send(attempt ?? (request..persistentConnection = false));
+        // Провайдер может не рвать соединение, а «подвешивать» его. Ждать 20 секунд
+        // не будем: через 6 секунд повторим запрос другим путём.
+        if (via == null && canRetry) sending = sending.timeout(const Duration(seconds: 6));
+        final response = await sending;
+        if (via != null && _proxyDown(response) && canRetry) {
+          // Посредник не работает (приостановлен за лимиты, ошибка шлюза) — дальше.
+          unawaited(response.stream.drain<void>().catchError((_) {}));
+          _route._proxyFailed(via);
+          continue;
+        }
+        if (via == null) {
+          _route._reportDirect(failed: false, ms: sw.elapsedMilliseconds);
+        } else {
+          _route._proxyWorked(via);
+        }
+        return response;
+      } catch (e) {
+        if (!_isConnectionProblem(e) || !canRetry) rethrow;
+        if (via == null) {
+          _route._reportDirect(failed: true);
+        } else {
+          _route._proxyFailed(via);
+        }
       }
-      return response;
-    } catch (e) {
-      if (!_isConnectionProblem(e)) rethrow;
-      if (viaProxy) {
-        _route._reportProxy(failed: true);
-      } else {
-        _route._reportDirect(failed: true);
-      }
-      final retry = _copy(request, viaProxy ? request.url : _route._toProxy(request.url));
-      if (retry == null || !auto) rethrow;
-      if (!viaProxy) UsageMeter.countProxyRequest();
-      return _inner.send(retry);
     }
+    throw StateError('no route to server');
   }
+
+  /// Ответ самого посредника или его площадки, а не Supabase: приложение
+  /// приостановлено, не выложено или шлюз не достучался до сервера.
+  static bool _proxyDown(http.StreamedResponse r) =>
+      r.statusCode == 502 ||
+      r.statusCode == 503 ||
+      r.statusCode == 504 ||
+      r.headers.containsKey('x-deno-error') ||
+      r.headers.containsKey('x-vercel-error');
 
   /// Сеть не пустила запрос (или подвесила его) — пробуем другим путём.
   /// Ответ сервера с ошибкой (4xx/5xx) сюда не попадает: это не сетевая проблема.

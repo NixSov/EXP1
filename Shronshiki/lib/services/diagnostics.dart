@@ -30,9 +30,12 @@ class Diagnostics {
       await route.probe(force: true);
       add(DiagResult('Путь к серверу',
           ok: route.lastDirectMs != null || route.lastProxyMs != null,
-          detail: 'напрямую: ${route.lastDirectMs != null ? '${route.lastDirectMs} мс' : 'не отвечает'}\n'
-              'посредник: ${route.lastProxyMs != null ? '${route.lastProxyMs} мс' : 'не отвечает'}\n'
-              'выбрано: ${route.usingProxy ? 'посредник' : 'напрямую'}'));
+          detail: [
+            'напрямую: ${route.lastDirectMs != null ? '${route.lastDirectMs} мс' : 'не отвечает'}',
+            for (final p in route.proxies)
+              'посредник ${p.host}: ${route.proxyMs[p] != null ? '${route.proxyMs[p]} мс' : 'не отвечает'}',
+            'выбрано: ${route.usingProxy ? 'посредник ${route.proxyUrl?.host}' : 'напрямую'}',
+          ].join('\n')));
     }
     add(await _health());
     add(await _database());

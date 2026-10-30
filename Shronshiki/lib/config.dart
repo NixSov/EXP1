@@ -82,7 +82,8 @@ class AppConfig {
   /// может принести нового посредника, а вписанный вручную не потеряется.
   static String _mergeProxies(String? stored, String built) {
     final all = <String>{};
-    for (final raw in [stored ?? '', built]) {
+    // Вшитые — первыми: новая сборка знает, какой посредник сейчас основной.
+    for (final raw in [built, stored ?? '']) {
       for (final url in splitUrls(raw)) {
         all.add(url.replaceAll(RegExp(r'/+$'), ''));
       }
