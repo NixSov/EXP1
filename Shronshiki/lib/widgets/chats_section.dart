@@ -22,6 +22,9 @@ class ChatsSectionState extends State<ChatsSection> {
   final _repo = ChatsRepository(AppState.instance.db);
   List<PersistentChat>? _chats;
 
+  /// Создавать чаты может только администратор (AdmiNix).
+  bool _canCreate = false;
+
   /// false — на сервере нет миграции chats.
   bool _supported = true;
 
@@ -34,7 +37,13 @@ class ChatsSectionState extends State<ChatsSection> {
   Future<void> reload() async {
     try {
       final chats = await _repo.myChats();
-      if (mounted) setState(() => _chats = chats);
+      final canCreate = await _repo.canCreate();
+      if (mounted) {
+        setState(() {
+          _chats = chats;
+          _canCreate = canCreate;
+        });
+      }
     } on PostgrestException catch (e) {
       if (e.code == 'PGRST202' && mounted) setState(() => _supported = false);
     } catch (_) {
@@ -51,7 +60,7 @@ class ChatsSectionState extends State<ChatsSection> {
   Future<void> _enter() async {
     final chat = await showDialog<PersistentChat>(
       context: context,
-      builder: (_) => _EnterChatDialog(repo: _repo),
+      builder: (_) => _EnterChatDialog(repo: _repo, canCreate: _canCreate),
     );
     if (chat == null || !mounted) return;
     unawaited(reload());
@@ -98,9 +107,10 @@ class ChatsSectionState extends State<ChatsSection> {
 
 /// Окно «Вход в чат»: ввести 6-значный ключ или создать новый чат.
 class _EnterChatDialog extends StatefulWidget {
-  const _EnterChatDialog({required this.repo});
+  const _EnterChatDialog({required this.repo, required this.canCreate});
 
   final ChatsRepository repo;
+  final bool canCreate;
 
   @override
   State<_EnterChatDialog> createState() => _EnterChatDialogState();
@@ -199,15 +209,16 @@ class _EnterChatDialogState extends State<_EnterChatDialog> {
           if (_error != null)
             Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
           const SizedBox(height: 4),
-          TextButton(
-            onPressed: _busy
-                ? null
-                : () => setState(() {
-                      _creating = !_creating;
-                      _error = null;
-                    }),
-            child: Text(_creating ? 'У меня есть ключ' : 'Создать новый чат'),
-          ),
+          if (widget.canCreate)
+            TextButton(
+              onPressed: _busy
+                  ? null
+                  : () => setState(() {
+                        _creating = !_creating;
+                        _error = null;
+                      }),
+              child: Text(_creating ? 'У меня есть ключ' : 'Создать новый чат'),
+            ),
         ],
       ),
       actions: [

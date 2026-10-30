@@ -1,6 +1,9 @@
 -- Постоянные чаты по ключу: создатель получает 6-значный ключ, остальные входят
 -- по нему и видят всю переписку. Сообщения не стираются. Работает через те же
 -- короткие запросы, что и комнаты (chat_poll / chat_send), без WebSocket.
+-- Создавать чаты могут только администраторы (таблица app_admins); при первом
+-- запуске туда попадает зарегистрированный аккаунт с именем AdmiNix.
+-- Добавить ещё одного: insert into public.app_admins (user_id) values ('<id>');
 
 create table if not exists public.chats (
   id         uuid primary key default gen_random_uuid(),
@@ -29,10 +32,32 @@ create table if not exists public.chat_messages (
 );
 create index if not exists chat_messages_chat_idx on public.chat_messages (chat_id, id);
 
+create table if not exists public.app_admins (
+  user_id uuid primary key references auth.users (id) on delete cascade
+);
+insert into public.app_admins (user_id)
+select p.id
+from public.profiles p
+join auth.users u on u.id = p.id
+where p.display_name = 'AdmiNix' and coalesce(u.is_anonymous, false) = false
+on conflict do nothing;
+
+alter table public.app_admins enable row level security;
 alter table public.chats enable row level security;
 alter table public.chat_members enable row level security;
 alter table public.chat_messages enable row level security;
-revoke all on public.chats, public.chat_members, public.chat_messages from anon, authenticated;
+revoke all on public.app_admins, public.chats, public.chat_members, public.chat_messages from anon, authenticated;
+
+-- Может ли текущий пользователь создавать чаты (для кнопки в приложении).
+create or replace function public.can_create_chats()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (select 1 from public.app_admins where user_id = auth.uid());
+$$;
 
 -- Чат как его видит участник.
 create or replace function public.chat_info(p_chat uuid, p_user uuid)
@@ -68,6 +93,9 @@ declare
 begin
   if uid is null then
     raise exception 'not authenticated' using errcode = '42501';
+  end if;
+  if not exists (select 1 from public.app_admins where user_id = uid) then
+    raise exception 'only admins can create chats' using errcode = '42501';
   end if;
   if char_length(btrim(coalesce(p_name, ''))) = 0 then
     raise exception 'empty name';
@@ -199,15 +227,23 @@ as $$
 $$;
 
 revoke all on function public.chat_info(uuid, uuid) from public, anon, authenticated;
+revoke all on function public.can_create_chats() from public, anon;
 revoke all on function public.create_chat(text) from public, anon;
 revoke all on function public.join_chat(text) from public, anon;
 revoke all on function public.my_chats() from public, anon;
 revoke all on function public.chat_poll(uuid, bigint, bigint) from public, anon;
 revoke all on function public.chat_send(uuid, text) from public, anon;
 revoke all on function public.leave_chat(uuid) from public, anon;
+grant execute on function public.can_create_chats() to authenticated;
 grant execute on function public.create_chat(text) to authenticated;
 grant execute on function public.join_chat(text) to authenticated;
 grant execute on function public.my_chats() to authenticated;
 grant execute on function public.chat_poll(uuid, bigint, bigint) to authenticated;
 grant execute on function public.chat_send(uuid, text) to authenticated;
 grant execute on function public.leave_chat(uuid) to authenticated;
+
+-- Проверка: здесь должна быть одна строка — ваш аккаунт.
+select p.display_name as "Создаёт чаты", u.email
+from public.app_admins a
+join public.profiles p on p.id = a.user_id
+join auth.users u on u.id = a.user_id;

@@ -76,6 +76,15 @@ class ChatsRepository {
     return [for (final m in raw as List) PersistentChat.fromMap(Map<String, dynamic>.from(m as Map))];
   }
 
+  /// Может ли текущий пользователь создавать чаты (только администратор).
+  Future<bool> canCreate() async {
+    try {
+      return await _db.rpc('can_create_chats').timeout(_timeout) == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<PersistentChat> create(String name) async {
     final raw = await _db.rpc('create_chat', params: {'p_name': name}).timeout(_timeout);
     return PersistentChat.fromMap(Map<String, dynamic>.from(raw as Map));
