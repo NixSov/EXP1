@@ -19,6 +19,8 @@ import 'setup_screen.dart';
 import '../services/updater.dart';
 import '../widgets/app_update.dart';
 import '../widgets/usage_bar.dart';
+import '../services/admin.dart';
+import 'admin_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -30,6 +32,16 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   AppState get _app => AppState.instance;
 
+  /// Показывать ли «Админ-панель» (решает сервер).
+  bool _isAdmin = false;
+
+  @override
+  void initState() {
+    super.initState();
+    AdminRepository(_app.db).isAdmin().then((v) {
+      if (mounted && v) setState(() => _isAdmin = true);
+    });
+  }
 
   Future<void> _changeName() async {
     final user = _app.db.auth.currentUser!;
@@ -121,7 +133,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ListTile(
           leading: Icon(Icons.alt_route),
           title: Text('Подключение к серверу: напрямую'),
-          subtitle: Text('Посредник не настроен (Supabase и TURN → «Посредник»)'),
+          subtitle: Text('Посредник не настроен (Сервер Supabase → «Посредник»)'),
         ),
       ];
     }
@@ -362,6 +374,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: _changeName,
               ),
               const UsageBar(),
+              if (_isAdmin)
+                ListTile(
+                  leading: const Icon(Icons.admin_panel_settings_outlined),
+                  title: const Text('Админ-панель'),
+                  subtitle: const Text('Все комнаты, чаты и аккаунты'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const AdminScreen())),
+                ),
               const Divider(),
             ],
             ..._themeSection(context),
@@ -425,7 +445,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
             ExpansionTile(
               leading: const Icon(Icons.dns_outlined),
-              title: const Text('Supabase и TURN'),
+              title: const Text('Сервер Supabase'),
               childrenPadding: const EdgeInsets.all(16),
               children: [
                 ServerConfigForm(

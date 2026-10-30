@@ -23,6 +23,7 @@
    - [`supabase/migrations/20261028090000_ice_servers.sql`](supabase/migrations/20261028090000_ice_servers.sql) — TURN-серверы для всех (см. ниже).
    - [`supabase/migrations/20261030140000_usage.sql`](supabase/migrations/20261030140000_usage.sql) — расход бесплатных лимитов (линия «Осталось ≈ N ч разговора» в настройках).
    - [`supabase/migrations/20261030160000_chats.sql`](supabase/migrations/20261030160000_chats.sql) — постоянные чаты по 6-значному ключу («Вход в чат» на главном экране).
+   - [`supabase/migrations/20261030180000_admin.sql`](supabase/migrations/20261030180000_admin.sql) — админ-панель (Настройки → «Админ-панель», только для администраторов).
    Файл можно запускать повторно — он ничего не сломает.
 3. **Authentication → Sign In / Providers**:
    - включите **Allow anonymous sign-ins** (нужно для гостей);

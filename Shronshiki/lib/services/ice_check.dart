@@ -46,7 +46,7 @@ class IceCheck {
       add(DiagResult(turn.name, ok: ok, detail: ok ? 'работает' : 'не отвечает или неверный логин/пароль'));
     }
     if (turns.isEmpty) {
-      add(DiagResult('TURN', ok: false, detail: 'не настроен: добавьте на сервере (ice_servers) или в настройках'));
+      add(DiagResult('TURN', ok: false, detail: 'не настроен: добавьте его на сервере (таблица ice_servers)'));
     }
     return results;
   }

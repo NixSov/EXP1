@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import '../app_state.dart';
 import '../config.dart';
 
-/// Первый запуск: адрес проекта Supabase, ключ и (необязательно) TURN.
+/// Первый запуск: адрес проекта Supabase, ключ и (необязательно) посредник.
+/// TURN вводить не нужно: приложение получает его с сервера (таблица ice_servers).
 class SetupScreen extends StatelessWidget {
   const SetupScreen({super.key, required this.onDone});
 
@@ -51,9 +52,6 @@ class _ServerConfigFormState extends State<ServerConfigForm> {
   final _form = GlobalKey<FormState>();
   late final TextEditingController _url;
   late final TextEditingController _key;
-  late final TextEditingController _turnUrls;
-  late final TextEditingController _turnUser;
-  late final TextEditingController _turnPass;
   late final TextEditingController _proxy;
   bool _saving = false;
   String? _error;
@@ -64,15 +62,12 @@ class _ServerConfigFormState extends State<ServerConfigForm> {
     final c = AppState.instance.config;
     _url = TextEditingController(text: c.supabaseUrl);
     _key = TextEditingController(text: c.supabaseAnonKey);
-    _turnUrls = TextEditingController(text: c.turnUrls.join(', '));
-    _turnUser = TextEditingController(text: c.turnUsername);
-    _turnPass = TextEditingController(text: c.turnCredential);
     _proxy = TextEditingController(text: c.proxyUrl);
   }
 
   @override
   void dispose() {
-    for (final c in [_url, _key, _turnUrls, _turnUser, _turnPass, _proxy]) {
+    for (final c in [_url, _key, _proxy]) {
       c.dispose();
     }
     super.dispose();
@@ -87,9 +82,10 @@ class _ServerConfigFormState extends State<ServerConfigForm> {
     final config = AppConfig(
       supabaseUrl: _url.text.trim().replaceAll(RegExp(r'/+$'), ''),
       supabaseAnonKey: _key.text.trim(),
-      turnUrls: AppConfig.splitUrls(_turnUrls.text),
-      turnUsername: _turnUser.text.trim(),
-      turnCredential: _turnPass.text.trim(),
+      // TURN приходит с сервера; вписанный когда-то вручную при сохранении убираем.
+      turnUrls: const [],
+      turnUsername: '',
+      turnCredential: '',
       proxyUrl: _proxy.text.trim().replaceAll(RegExp(r'/+$'), ''),
     );
     try {
@@ -144,33 +140,6 @@ class _ServerConfigFormState extends State<ServerConfigForm> {
               final text = (v ?? '').trim();
               return text.isEmpty || text.startsWith('https://') ? null : 'Адрес должен начинаться с https://';
             },
-          ),
-          const SizedBox(height: 20),
-          Text('TURN-сервер (необязательно)', style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 4),
-          const Text(
-            'Нужен, если участники не слышат друг друга через мобильный интернет.',
-            style: TextStyle(fontSize: 12),
-          ),
-          const SizedBox(height: 8),
-          TextFormField(
-            controller: _turnUrls,
-            decoration: const InputDecoration(
-              labelText: 'Адреса TURN (через запятую)',
-              hintText: 'turn:global.relay.metered.ca:80',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _turnUser,
-            decoration: const InputDecoration(labelText: 'Логин TURN', border: OutlineInputBorder()),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _turnPass,
-            obscureText: true,
-            decoration: const InputDecoration(labelText: 'Пароль TURN', border: OutlineInputBorder()),
           ),
           if (_error != null) ...[
             const SizedBox(height: 12),
