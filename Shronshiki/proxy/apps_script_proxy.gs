@@ -24,7 +24,7 @@ const REQUEST_HEADERS = ['apikey', 'authorization', 'accept', 'prefer', 'accept-
   'content-profile', 'x-client-info', 'x-supabase-api-version'];
 const RESPONSE_HEADERS = ['content-type', 'content-range', 'x-supabase-api-version'];
 
-/** GET …/exec/health — проверка доступности. */
+/** GET …/exec — проверка доступности (…/exec/health Google без входа не открывает). */
 function doGet(e) {
   return reply_({ s: 200, h: { 'content-type': 'text/plain' }, b: 'ok' });
 }

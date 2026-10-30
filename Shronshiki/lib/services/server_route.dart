@@ -132,7 +132,7 @@ class ServerRoute extends ChangeNotifier {
     try {
       final results = await Future.wait([
         _measure(supabaseUrl.replace(path: '/auth/v1/health')),
-        for (final p in proxies) _measure(p.replace(path: '${p.path}/health')),
+        for (final p in proxies) _measure(healthUrl(p)),
       ]);
       final direct = results[0];
       // Самый быстрый из ответивших посредников.
@@ -163,6 +163,11 @@ class ServerRoute extends ChangeNotifier {
   }
 
   static Future<int?> _measure(Uri url) => measureUrl(url);
+
+  /// Адрес проверки посредника. Apps Script без входа в Google открывает только
+  /// сам …/exec (с добавкой к пути просит войти) — его и проверяем.
+  static Uri healthUrl(Uri proxy) =>
+      _RoutingClient._isEnvelopeProxy(proxy) ? proxy : proxy.replace(path: '${proxy.path}/health');
 
   /// HTTP-клиент для Supabase: выбирает путь для каждого запроса.
   http.Client createClient() => _RoutingClient(this);
