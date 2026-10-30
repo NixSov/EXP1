@@ -79,7 +79,7 @@ begin
       returning id into new_id;
       exit;
     exception when unique_violation then
-      -- Такой ключ уже есть — пробуем другой.
+      null;  -- такой ключ уже есть — пробуем другой
     end;
   end loop;
   insert into public.chat_members (chat_id, user_id) values (new_id, uid);
