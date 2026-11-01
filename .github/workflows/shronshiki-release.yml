@@ -1,0 +1,265 @@
+# Сборка Shronshiki и выпуск обновления.
+#
+# Каждый push в ветку собирает Windows (установщик + ZIP) и Android (APK) и, если
+# задан ключ подписи, выкладывает их выпуском `shronshiki-b<номер>` в Releases.
+# Сайт (веб-версия) публикуется в ветку gh-pages → https://nixsov.github.io/EXP1/
+# Приложение само находит такой выпуск: Настройки → «Проверить обновления».
+#
+# Секреты (Settings → Secrets and variables → Actions):
+#   SHRONSHIKI_KEY_PASSWORD — пароль от android/app/release.keystore.enc (ключ подписи APK);
+#     без него APK собирается, но выпуск не создаётся;
+#   SHRONSHIKI_SUPABASE_URL, SHRONSHIKI_SUPABASE_ANON_KEY, SHRONSHIKI_PROXY_URL —
+#     адрес сервера; без них сайт не публикуется, а новая установка приложения
+#     спросит адрес и ключ при первом запуске (при обновлении настройки сохраняются);
+#   SHRONSHIKI_TURN_URLS, SHRONSHIKI_TURN_USERNAME, SHRONSHIKI_TURN_CREDENTIAL —
+#     необязательно (TURN лучше хранить на сервере, таблица ice_servers).
+name: Shronshiki
+
+on:
+  push:
+    branches: [claude/shronshiki-voice-chat-7xg4o3]
+    paths:
+      - 'Shronshiki/**'
+      - '.github/workflows/shronshiki-release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shronshiki-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Номер сборки растёт с каждым запуском; versionCode APK должен только расти.
+  BUILD_NUMBER: ${{ github.run_number }}
+  BUILD_OFFSET: 100
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: Shronshiki
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.8
+          cache: true
+
+      - name: Dependencies
+        run: flutter pub get
+
+      - name: Tests
+        run: flutter test
+
+      - name: Config from secrets
+        shell: pwsh
+        env:
+          SUPABASE_URL: ${{ secrets.SHRONSHIKI_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SHRONSHIKI_SUPABASE_ANON_KEY }}
+          PROXY_URL: ${{ secrets.SHRONSHIKI_PROXY_URL }}
+          TURN_URLS: ${{ secrets.SHRONSHIKI_TURN_URLS }}
+          TURN_USERNAME: ${{ secrets.SHRONSHIKI_TURN_USERNAME }}
+          TURN_CREDENTIAL: ${{ secrets.SHRONSHIKI_TURN_CREDENTIAL }}
+        run: |
+          $config = [ordered]@{
+            SUPABASE_URL      = "$env:SUPABASE_URL"
+            SUPABASE_ANON_KEY = "$env:SUPABASE_ANON_KEY"
+            PROXY_URL         = "$env:PROXY_URL"
+            TURN_URLS         = "$env:TURN_URLS"
+            TURN_USERNAME     = "$env:TURN_USERNAME"
+            TURN_CREDENTIAL   = "$env:TURN_CREDENTIAL"
+          }
+          New-Item -ItemType Directory -Force config | Out-Null
+          $config | ConvertTo-Json | Set-Content -Encoding utf8NoBOM config/app_config.json
+          if ($env:SUPABASE_URL) { "Supabase: из секретов" } else { "Supabase: не задан — программа спросит при запуске" }
+
+      - name: Build
+        shell: pwsh
+        run: |
+          $build = [int]$env:BUILD_NUMBER + [int]$env:BUILD_OFFSET
+          flutter build windows --release --dart-define-from-file=config/app_config.json --build-number=$build --dart-define=APP_BUILD=$build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup --no-progress -y | Out-Null
+          }
+          $version = (Select-String -Path pubspec.yaml -Pattern '^version:\s*([0-9.]+)').Matches[0].Groups[1].Value
+          $env:APP_VERSION = "$version.$([int]$env:BUILD_NUMBER + [int]$env:BUILD_OFFSET)"
+          & $iscc windows\installer\shronshiki.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath build\installer\Shronshiki-Windows-portable.zip
+          Get-ChildItem build\installer
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Shronshiki-Windows
+          path: |
+            Shronshiki/build/installer/Shronshiki-Setup.exe
+            Shronshiki/build/installer/Shronshiki-Windows-portable.zip
+          retention-days: 30
+
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      signed: ${{ steps.key.outputs.signed }}
+    defaults:
+      run:
+        working-directory: Shronshiki
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.8
+          cache: true
+
+      - name: Dependencies
+        run: flutter pub get
+
+      - name: Config from secrets
+        env:
+          SUPABASE_URL: ${{ secrets.SHRONSHIKI_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SHRONSHIKI_SUPABASE_ANON_KEY }}
+          PROXY_URL: ${{ secrets.SHRONSHIKI_PROXY_URL }}
+          TURN_URLS: ${{ secrets.SHRONSHIKI_TURN_URLS }}
+          TURN_USERNAME: ${{ secrets.SHRONSHIKI_TURN_USERNAME }}
+          TURN_CREDENTIAL: ${{ secrets.SHRONSHIKI_TURN_CREDENTIAL }}
+        run: |
+          mkdir -p config
+          jq -n 'env | {SUPABASE_URL, SUPABASE_ANON_KEY, PROXY_URL, TURN_URLS, TURN_USERNAME, TURN_CREDENTIAL} | map_values(. // "")' > config/app_config.json
+
+      - name: Signing key
+        id: key
+        env:
+          KEY_PASSWORD: ${{ secrets.SHRONSHIKI_KEY_PASSWORD }}
+        run: |
+          if [ -n "$KEY_PASSWORD" ] && [ -f android/app/release.keystore.enc ]; then
+            openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in android/app/release.keystore.enc \
+              -out "$RUNNER_TEMP/release.jks" -pass env:KEY_PASSWORD
+            echo "SHRONSHIKI_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+            echo "SHRONSHIKI_KEY_ALIAS=shronshiki" >> "$GITHUB_ENV"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "APK подписывается ключом выпусков"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Нет ключа подписи (SHRONSHIKI_KEY_PASSWORD или release.keystore.enc) — выпуск не создаётся"
+          fi
+
+      - name: Build
+        run: |
+          build=$((BUILD_NUMBER + BUILD_OFFSET))
+          flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64 \
+            --dart-define-from-file=config/app_config.json --build-number=$build --dart-define=APP_BUILD=$build
+          mkdir -p build/release
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk build/release/Shronshiki.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk build/release/Shronshiki-armv7.apk
+          rm -f "$RUNNER_TEMP/release.jks"
+          ls -l build/release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Shronshiki-Android
+          path: Shronshiki/build/release/*.apk
+          retention-days: 30
+
+  web:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Сайт публикуется в ветку gh-pages → https://nixsov.github.io/EXP1/
+    # (Settings → Pages → Deploy from a branch → gh-pages).
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: Shronshiki
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.47.8
+          cache: true
+
+      - name: Dependencies
+        run: flutter pub get
+
+      - name: Config from secrets
+        id: config
+        env:
+          SUPABASE_URL: ${{ secrets.SHRONSHIKI_SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SHRONSHIKI_SUPABASE_ANON_KEY }}
+          PROXY_URL: ${{ secrets.SHRONSHIKI_PROXY_URL }}
+        run: |
+          mkdir -p config
+          # TURN в сайт не вшиваем: его выдаёт сервер после входа (ice_servers).
+          jq -n 'env | {SUPABASE_URL, SUPABASE_ANON_KEY, PROXY_URL} | map_values(. // "")' > config/app_config.json
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_ANON_KEY" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::Нет секретов SHRONSHIKI_SUPABASE_URL / SHRONSHIKI_SUPABASE_ANON_KEY — сайт не публикуется"
+          fi
+
+      - name: Build
+        run: |
+          build=$((BUILD_NUMBER + BUILD_OFFSET))
+          flutter build web --release --base-href /EXP1/ --no-web-resources-cdn \
+            --dart-define-from-file=config/app_config.json --dart-define=APP_BUILD=$build
+
+      - name: Publish to GitHub Pages
+        if: steps.config.outputs.ready == 'true' && github.event_name != 'pull_request'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ github.token }}
+          publish_dir: Shronshiki/build/web
+          publish_branch: gh-pages
+          force_orphan: true
+          commit_message: "Shronshiki site, build ${{ github.run_number }}"
+
+  release:
+    needs: [windows, android]
+    if: needs.android.outputs.signed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          build=$((BUILD_NUMBER + BUILD_OFFSET))
+          tag="shronshiki-b$build"
+          notes=$(cat Shronshiki/RELEASE_NOTES.md 2>/dev/null || echo "Сборка $build")
+          gh release create "$tag" \
+            dist/Shronshiki-Android/Shronshiki.apk \
+            dist/Shronshiki-Android/Shronshiki-armv7.apk \
+            dist/Shronshiki-Windows/Shronshiki-Setup.exe \
+            dist/Shronshiki-Windows/Shronshiki-Windows-portable.zip \
+            --target "$GITHUB_SHA" --title "Shronshiki, сборка $build" --notes "$notes" --latest
+          # Храним только 5 последних выпусков приложения.
+          gh release list --limit 100 --json tagName --jq '.[].tagName' | grep '^shronshiki-b' | sort -t b -k2 -n -r \
+            | tail -n +6 | while read -r old; do gh release delete "$old" --cleanup-tag --yes; done
