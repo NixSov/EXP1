@@ -11,6 +11,7 @@ const SIZES = [
   { name: "Большая", w: 23, h: 15 },
 ];
 const MODES = ["Авто", "Поверхность", "Пещеры"];
+const VIEWS = ["Картинка (новый)", "Символы (простой)"];
 const MAX_WAYPOINTS = 30;
 const MAX_DEATHS = 5;
 const UI = "textures/ui/adv/";
@@ -18,7 +19,7 @@ const UI = "textures/ui/adv/";
 // ---------------------------------------------------------------- настройки и точки
 
 function getCfg(p) {
-  return Object.assign({ zoom: 1, size: 1, mode: 0, players: true, mobs: true, wps: true }, getJson(p, "adv:navcfg", {}));
+  return Object.assign({ zoom: 1, size: 1, mode: 0, view: 0, players: true, mobs: true, wps: true }, getJson(p, "adv:navcfg", {}));
 }
 
 function setCfg(p, cfg) {
@@ -96,39 +97,42 @@ function chunkLoaded(dim, x, z, py, chunkCache) {
   return ok;
 }
 
-function surfaceCell(dim, x, z, py, chunkCache) {
+/** Верхний блок колонки: { y, cat } или undefined. Снежный слой поверх травы считается снегом. */
+function surfaceSample(dim, x, z, py, chunkCache) {
   const key = dim.id + "|" + x + "|" + z;
   const now = system.currentTick;
   let t = topCache.get(key);
   if (!t || now - t.tick > TOP_TTL || now < t.tick) {
-    if (!chunkLoaded(dim, x, z, py, chunkCache)) return TERRAIN.unknown[1];
+    if (!chunkLoaded(dim, x, z, py, chunkCache)) return undefined;
     let b;
     try {
       b = dim.getTopmostBlock({ x, z });
     } catch {
       b = undefined;
     }
-    if (!b) return TERRAIN.unknown[1];
-    t = { y: b.location.y, cat: category(b.typeId), tick: now };
+    if (!b) return undefined;
+    let cat = category(b.typeId);
+    const above = getBlock(dim, { x, y: b.location.y + 1, z });
+    if (above && /snow_layer|powder_snow/.test(above.typeId)) cat = "snow";
+    t = { y: b.location.y, cat, tick: now };
     topCache.set(key, t);
     if (topCache.size > 20000) topCache.clear();
   }
-  const dy = t.y - py;
-  return TERRAIN[t.cat][dy > 4 ? 2 : dy < -4 ? 0 : 1];
+  return t;
 }
 
 function caveCell(dim, x, z, py, chunkCache) {
-  if (!chunkLoaded(dim, x, z, py, chunkCache)) return TERRAIN.unknown[1];
+  if (!chunkLoaded(dim, x, z, py, chunkCache)) return "unknown:1";
   const feet = getBlock(dim, { x, y: py, z });
-  if (!feet) return TERRAIN.unknown[1];
+  if (!feet) return "unknown:1";
   try {
-    if (feet.isLiquid) return TERRAIN[category(feet.typeId)][1];
+    if (feet.isLiquid) return category(feet.typeId) + ":1";
   } catch {}
-  if (!isOpen(feet)) return TERRAIN[category(feet.typeId)][0]; // стена
+  if (!isOpen(feet)) return category(feet.typeId) + ":0"; // стена
   const below = getBlock(dim, { x, y: py - 1, z });
-  if (below && !isOpen(below)) return TERRAIN.cave[2]; // пол
+  if (below && !isOpen(below)) return "cave:2"; // пол
   const below2 = getBlock(dim, { x, y: py - 2, z });
-  return below2 && !isOpen(below2) ? TERRAIN.cave[1] : TERRAIN.cave[0]; // ступень / провал
+  return below2 && !isOpen(below2) ? "cave:1" : "cave:0"; // ступень / провал
 }
 
 function useCaveMode(p, cfg) {
@@ -155,10 +159,31 @@ const COMPASS = ["С", "СВ", "В", "ЮВ", "Ю", "ЮЗ", "З", "СЗ"];
 
 // ---------------------------------------------------------------- отрисовка
 
-/** Отрисовка по строке за тик — чтобы игра не прерывала долгий скрипт. */
+// Окно с картинками (JSON UI): сетка фиксированного размера
+const PIC_W = 21;
+const PIC_H = 15;
+const MAP_TEX = "textures/ui/adv/map/";
+
+/** Клетка карты -> символ (простой вид). */
+function keyToGlyph(key) {
+  const [a, b] = key.split(":");
+  return a === "m" ? MARKERS[b] : TERRAIN[a][Number(b)];
+}
+
+/** Клетка карты -> картинка (новый вид). */
+function keyToTexture(key) {
+  const [a, b] = key.split(":");
+  return MAP_TEX + (a === "m" ? "m_" + b : a + "_" + b);
+}
+
+/**
+ * Отрисовка по строке за тик — чтобы игра не прерывала долгий скрипт.
+ * Тени как у ванильной карты: клетка выше северной соседки светлее, ниже — темнее.
+ */
 function* renderMap(p, cfg, out) {
   const dim = p.dimension;
-  const size = SIZES[cfg.size] ?? SIZES[1];
+  const pic = cfg.view === 0;
+  const size = pic ? { w: PIC_W, h: PIC_H } : SIZES[cfg.size] ?? SIZES[1];
   const scale = ZOOMS[cfg.zoom] ?? 1;
   const c = V.floor(p.location);
   const hw = Math.floor(size.w / 2);
@@ -167,22 +192,46 @@ function* renderMap(p, cfg, out) {
 
   const chunkCache = new Map();
   const grid = [];
-  for (let r = 0; r < size.h; r++) {
+  let northRow = [];
+  for (let r = -1; r < size.h; r++) {
     const row = [];
+    const samples = [];
     for (let col = 0; col < size.w; col++) {
       const x = c.x + (col - hw) * scale;
       const z = c.z + (r - hh) * scale;
-      row.push(cave ? caveCell(dim, x, z, c.y, chunkCache) : surfaceCell(dim, x, z, c.y, chunkCache));
+      if (cave) {
+        row.push(r < 0 ? undefined : caveCell(dim, x, z, c.y, chunkCache));
+        continue;
+      }
+      const t = surfaceSample(dim, x, z, c.y, chunkCache);
+      if (r < 0) {
+        row.push(t);
+        continue;
+      }
+      if (!t) {
+        row.push("unknown:1");
+        continue;
+      }
+      const n = northRow[col];
+      let shade = 1;
+      if (t.cat !== "water" && t.cat !== "lava" && n) shade = t.y > n.y ? 2 : t.y < n.y ? 0 : 1;
+      row.push(t.cat + ":" + shade);
+      samples[col] = t;
     }
-    grid.push(row);
+    if (r < 0) {
+      northRow = row;
+    } else {
+      northRow = samples;
+      grid.push(row);
+    }
     yield;
     if (!isValid(p)) return;
   }
 
-  const put = (loc, ch) => {
+  const put = (loc, kind) => {
     const col = Math.round((loc.x - c.x) / scale) + hw;
     const r = Math.round((loc.z - c.z) / scale) + hh;
-    if (col >= 0 && col < size.w && r >= 0 && r < size.h) grid[r][col] = ch;
+    if (col >= 0 && col < size.w && r >= 0 && r < size.h) grid[r][col] = "m:" + kind;
   };
   const radius = Math.max(hw, hh) * scale + scale;
 
@@ -194,14 +243,14 @@ function* renderMap(p, cfg, out) {
     for (const e of mobs) {
       try {
         if (!e.getComponent("minecraft:health")) continue;
-        put(e.location, e.matches({ families: ["monster"] }) ? MARKERS.hostile : MARKERS.passive);
+        put(e.location, e.matches({ families: ["monster"] }) ? "hostile" : "passive");
       } catch {}
     }
   }
   if (cfg.wps) {
     for (const w of getWaypoints(p)) {
       if (w.dim !== dim.id) continue;
-      put(w, w.kind === "death" ? MARKERS.death : w.kind === "dungeon" ? MARKERS.dungeon : MARKERS.waypoint);
+      put(w, w.kind === "death" ? "death" : w.kind === "dungeon" ? "dungeon" : "waypoint");
     }
   }
   const others = [];
@@ -209,14 +258,12 @@ function* renderMap(p, cfg, out) {
     for (const o of world.getAllPlayers()) {
       if (o.id === p.id || o.dimension.id !== dim.id) continue;
       others.push(o);
-      put(o.location, MARKERS.player);
+      put(o.location, "player");
     }
   }
-  grid[hh][hw] = MARKERS[SELF[headingIndex(p)]];
-  Object.assign(out, { lines: grid.map((r) => r.join("")), cave, scale, others });
+  grid[hh][hw] = "m:" + SELF[headingIndex(p)];
+  Object.assign(out, { grid, cave, scale, others, pic });
 }
-
-// ---------------------------------------------------------------- окна
 
 const rendering = new Set();
 
@@ -241,31 +288,45 @@ export function openMap(p) {
   })());
 }
 
+// Метка в заголовке: по ней ресурс-пак (ui/server_form.json) рисует окно карты картинками.
+export const MAP_FORM_FLAG = "§a§d§v§r";
+const ACTIONS = [
+  ["Приблизить", "zoom_in"],
+  ["Отдалить", "zoom_out"],
+  ["Вейпоинт", "add_wp"],
+  ["Список", "list"],
+  ["Вид", "settings"],
+];
+
 function showMap(p, cfg, m) {
   const c = V.floor(p.location);
-  const head = `§7${c.x}, ${c.y}, ${c.z} §8| §7${COMPASS[headingIndex(p)]} §8| §71:${m.scale} §8| §7${m.cave ? "пещеры" : "поверхность"}`;
-  const legend = [];
-  if (cfg.players) legend.push(`${MARKERS.player}§r игроки`);
-  if (cfg.mobs) legend.push(`${MARKERS.hostile}§r враги ${MARKERS.passive}§r мирные`);
-  if (cfg.wps) legend.push(`${MARKERS.waypoint}§r точки ${MARKERS.death}§r смерть`);
+  const head = `§7${c.x}, ${c.y}, ${c.z}  §8|  §7${COMPASS[headingIndex(p)]}  §8|  §71:${m.scale}  §8|  §7${m.cave ? "пещеры" : "поверхность"}`;
   let near = "";
   if (m.others.length) {
     near = "\n§7Рядом: " + m.others
       .map((o) => `§b${o.name}§7 ${Math.round(V.dist(o.location, p.location))} бл.`)
       .join(", ");
   }
-  const body = `${head}\n§r${m.lines.join("\n")}\n§r${legend.join("  ")}${near}`;
 
-  const form = new ActionFormData()
-    .title("§lНавигатор")
-    .body(body)
-    .button("Приблизить", UI + "zoom_in")
-    .button("Отдалить", UI + "zoom_out")
-    .button("Поставить вейпоинт", UI + "add_wp")
-    .button("Список вейпоинтов", UI + "list")
-    .button("Отображение", UI + "settings");
+  const form = new ActionFormData();
+  let offset = 0;
+  if (m.pic) {
+    form.title(MAP_FORM_FLAG + "§lНавигатор").body(head + near);
+    for (const row of m.grid) for (const key of row) form.button("", keyToTexture(key));
+    offset = PIC_W * PIC_H;
+  } else {
+    const legend = [];
+    if (cfg.players) legend.push(`${MARKERS.player}§r игроки`);
+    if (cfg.mobs) legend.push(`${MARKERS.hostile}§r враги ${MARKERS.passive}§r мирные`);
+    if (cfg.wps) legend.push(`${MARKERS.waypoint}§r точки ${MARKERS.death}§r смерть`);
+    const lines = m.grid.map((row) => row.map(keyToGlyph).join(""));
+    form.title("§lНавигатор").body(`${head}\n§r${lines.join("\n")}\n§r${legend.join("  ")}${near}`);
+  }
+  for (const [text, icon] of ACTIONS) form.button(text, UI + icon);
+
   showForm(form, p, (res) => {
-    switch (res.selection) {
+    const sel = res.selection - offset;
+    switch (sel) {
       case 0:
         cfg.zoom = Math.max(0, cfg.zoom - 1);
         setCfg(p, cfg);
@@ -280,6 +341,8 @@ function showMap(p, cfg, m) {
         return openWaypointList(p);
       case 4:
         return openDisplay(p);
+      default:
+        return openMap(p); // нажата клетка карты
     }
   });
 }
@@ -398,19 +461,21 @@ function openDisplay(p) {
   const cfg = getCfg(p);
   const form = new ModalFormData()
     .title("Отображение")
+    .dropdown("Вид окна", VIEWS, { defaultValueIndex: cfg.view })
     .dropdown("Вид карты", MODES, { defaultValueIndex: cfg.mode })
-    .dropdown("Размер карты", SIZES.map((s) => s.name), { defaultValueIndex: cfg.size })
+    .dropdown("Размер карты (для простого вида)", SIZES.map((s) => s.name), { defaultValueIndex: cfg.size })
     .toggle("Показывать игроков", { defaultValue: cfg.players })
     .toggle("Показывать мобов", { defaultValue: cfg.mobs })
     .toggle("Показывать вейпоинты и точки смерти", { defaultValue: cfg.wps })
     .submitButton("Применить");
   showForm(form, p, (res) => {
     const v = res.formValues ?? [];
-    cfg.mode = Number(v[0] ?? cfg.mode);
-    cfg.size = Number(v[1] ?? cfg.size);
-    cfg.players = !!v[2];
-    cfg.mobs = !!v[3];
-    cfg.wps = !!v[4];
+    cfg.view = Number(v[0] ?? cfg.view);
+    cfg.mode = Number(v[1] ?? cfg.mode);
+    cfg.size = Number(v[2] ?? cfg.size);
+    cfg.players = !!v[3];
+    cfg.mobs = !!v[4];
+    cfg.wps = !!v[5];
     setCfg(p, cfg);
     openMap(p);
   });

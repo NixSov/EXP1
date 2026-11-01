@@ -241,6 +241,115 @@ def ui_icon(kind):
     return img.resize((32, 32), Image.NEAREST)
 
 
+# ---------------------------------------------------------------- окно карты (JSON UI)
+
+# Цвета как у ванильной карты Minecraft
+MAP_COLORS = {
+    "unknown": (214, 190, 150),
+    "water": (64, 64, 255),
+    "lava": (255, 96, 0),
+    "grass": (127, 178, 56),
+    "foliage": (0, 124, 0),
+    "sand": (247, 233, 163),
+    "snow": (255, 255, 255),
+    "stone": (112, 112, 112),
+    "dirt": (151, 109, 77),
+    "wood": (143, 119, 72),
+    "nether": (112, 2, 0),
+    "end": (229, 229, 153),
+    "dark": (25, 25, 25),
+    "clay": (160, 77, 78),
+    "cave": (82, 82, 88),
+}
+MAP_SHADES = (180 / 255, 220 / 255, 1.0)
+
+
+def map_tile(cat, shade_idx, rnd):
+    base = shade(MAP_COLORS[cat], MAP_SHADES[shade_idx])
+    t = Image.new("RGBA", (8, 8))
+    p = t.load()
+    for y in range(8):
+        for x in range(8):
+            k = 1.0
+            if cat in ("grass", "foliage", "sand", "dirt", "stone", "snow", "unknown"):
+                k = 1 + (rnd.random() - 0.5) * 0.1
+            if cat == "foliage" and rnd.random() < 0.18:
+                k = 0.78
+            if cat == "grass" and rnd.random() < 0.08:
+                k = 0.86
+            if cat == "water" and (x + y * 3) % 7 == 0:
+                k = 1.12
+            if cat == "lava" and rnd.random() < 0.2:
+                k = 1.15
+            p[x, y] = shade(base, k) + (255,)
+    return t.resize((16, 16), Image.NEAREST)
+
+
+def map_marker(kind):
+    cell = marker_cell(kind).copy()
+    # фон метки прозрачный — сквозь него виден пергамент рамки
+    px = cell.load()
+    for y in range(16):
+        for x in range(16):
+            if px[x, y][:3] == (30, 30, 34):
+                px[x, y] = (0, 0, 0, 0)
+    return cell
+
+
+def make_map_ui():
+    d = os.path.join(UI_TEX, "map")
+    os.makedirs(d, exist_ok=True)
+    rnd = random.Random(11)
+    for cat in MAP_COLORS:
+        for si in range(3):
+            map_tile(cat, si, rnd).save(os.path.join(d, f"{cat}_{si}.png"))
+    for kind in MARKERS:
+        map_marker(kind).save(os.path.join(d, f"m_{kind}.png"))
+
+    # рамка-пергамент как у ванильной карты (9-slice)
+    fr = Image.new("RGBA", (32, 32), (0, 0, 0, 0))
+    fp = fr.load()
+    r2 = random.Random(3)
+    for y in range(32):
+        for x in range(32):
+            edge = min(x, y, 31 - x, 31 - y)
+            if edge <= 1:
+                c = (110, 84, 50) if r2.random() < 0.7 else (30, 22, 14)
+            elif edge <= 5:
+                c = (199, 172, 128) if r2.random() < 0.8 else (170, 140, 98)
+            else:
+                c = (214, 190, 150)
+            fp[x, y] = c + (255,)
+    fr.save(os.path.join(UI_TEX, "map_frame.png"))
+    write_json(os.path.join(UI_TEX, "map_frame.json"), {"nineslice_size": 6, "base_size": [32, 32]})
+
+    # тёмный фон окна (9-slice)
+    bg = Image.new("RGBA", (16, 16), (40, 42, 50, 245))
+    bd = ImageDraw.Draw(bg)
+    bd.rectangle((0, 0, 15, 15), outline=(12, 12, 16, 255))
+    bd.rectangle((1, 1, 14, 14), outline=(88, 90, 104, 255))
+    bg.save(os.path.join(UI_TEX, "panel_bg.png"))
+    write_json(os.path.join(UI_TEX, "panel_bg.json"), {"nineslice_size": 3, "base_size": [16, 16]})
+
+    # кнопки действий (9-slice) и крестик закрытия
+    for name, fill, top in (("btn", (70, 74, 88), (104, 108, 126)),
+                            ("btn_hover", (52, 120, 60), (90, 170, 96)),
+                            ("btn_pressed", (34, 84, 40), (52, 110, 58))):
+        b = Image.new("RGBA", (16, 16), fill + (255,))
+        bdr = ImageDraw.Draw(b)
+        bdr.rectangle((0, 0, 15, 15), outline=(10, 10, 14, 255))
+        bdr.line((1, 1, 14, 1), fill=top + (255,))
+        bdr.line((1, 14, 14, 14), fill=shade(fill, 0.6) + (255,))
+        b.save(os.path.join(UI_TEX, name + ".png"))
+        write_json(os.path.join(UI_TEX, name + ".json"), {"nineslice_size": 3, "base_size": [16, 16]})
+    for name, col in (("close", (220, 220, 220)), ("close_hover", (255, 90, 90))):
+        c = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+        cd = ImageDraw.Draw(c)
+        cd.line((3, 3, 12, 12), fill=col + (255,), width=2)
+        cd.line((12, 3, 3, 12), fill=col + (255,), width=2)
+        c.save(os.path.join(UI_TEX, name + ".png"))
+
+
 # ---------------------------------------------------------------- JSON
 
 def write_json(path, data):
@@ -361,6 +470,7 @@ def main():
     write_json(os.path.join(texts, "languages.json"), ["ru_RU", "en_US"])
 
     terrain, markers = make_glyphs()
+    make_map_ui()
     with open(os.path.join(BP, "scripts", "glyphs.js"), "w", encoding="utf-8") as f:
         f.write("// Сгенерировано tools/adv_generate.py — не редактировать вручную.\n")
         f.write("export const TERRAIN = " + json.dumps(terrain, ensure_ascii=True, indent=2) + ";\n")
