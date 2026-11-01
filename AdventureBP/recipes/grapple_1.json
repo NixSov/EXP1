@@ -1,0 +1,25 @@
+{
+  "format_version": "1.20.10",
+  "minecraft:recipe_shapeless": {
+    "description": {
+      "identifier": "adv:grapple_1"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "ingredients": [
+      {
+        "item": "minecraft:stick"
+      },
+      {
+        "item": "minecraft:string"
+      },
+      {
+        "tag": "minecraft:stone_tool_materials"
+      }
+    ],
+    "result": {
+      "item": "adv:grapple_1"
+    }
+  }
+}

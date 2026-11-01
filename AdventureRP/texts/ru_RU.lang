@@ -1,0 +1,9 @@
+pack.name=Приключения
+pack.description=Навигатор с картой, крюк-кошка, рюкзак и данжи
+item.adv:navigator.name=§bНавигатор
+item.adv:backpack.name=§6Рюкзак
+item.adv:grapple_1.name=§fКрюк-кошка I
+item.adv:grapple_2.name=§fКрюк-кошка II
+item.adv:grapple_3.name=§fКрюк-кошка III
+item.adv:grapple_4.name=§fКрюк-кошка IV
+item.adv:grapple_5.name=§fКрюк-кошка V

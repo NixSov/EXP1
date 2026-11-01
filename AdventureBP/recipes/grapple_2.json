@@ -1,0 +1,23 @@
+{
+  "format_version": "1.20.10",
+  "minecraft:recipe_shapeless": {
+    "description": {
+      "identifier": "adv:grapple_2"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "ingredients": [
+      {
+        "item": "adv:grapple_1"
+      },
+      {
+        "item": "minecraft:iron_ingot",
+        "count": 3
+      }
+    ],
+    "result": {
+      "item": "adv:grapple_2"
+    }
+  }
+}

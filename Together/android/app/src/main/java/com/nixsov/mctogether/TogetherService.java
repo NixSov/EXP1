@@ -34,7 +34,11 @@ public class TogetherService extends Service implements RelayClient.Listener {
     public static final String EXTRA_SERVER = "server";
     public static final String EXTRA_ROOM = "room";
     public static final String EXTRA_NAME = "name";
-    public static final String EXTRA_HOST = "host";
+    public static final String EXTRA_ROLE = "role";
+    public static final String EXTRA_GAME = "game";
+    public static final String ROLE_HOST = "host";
+    public static final String ROLE_GUEST = "guest";
+    public static final String ROLE_DIRECT = "direct";
 
     private static final String CHANNEL = "together";
     private static final int NOTIF_ID = 1;
@@ -61,6 +65,9 @@ public class TogetherService extends Service implements RelayClient.Listener {
     private VoiceEngine voice;
     private HostTunnel hostTunnel;
     private GuestTunnel guestTunnel;
+    private DirectTunnel directTunnel;
+    private volatile boolean running;
+    private String role;
     private OverlayButton overlay;
     private WifiManager.MulticastLock multicastLock;
     private PowerManager.WakeLock wakeLock;
@@ -75,10 +82,10 @@ public class TogetherService extends Service implements RelayClient.Listener {
 
     // ------------------------------------------------------------ жизненный цикл
 
-    public static void start(Context ctx, String server, String room, String name, boolean host) {
+    public static void start(Context ctx, String server, String room, String name, String role, String game) {
         Intent i = new Intent(ctx, TogetherService.class).setAction(ACTION_START)
                 .putExtra(EXTRA_SERVER, server).putExtra(EXTRA_ROOM, room)
-                .putExtra(EXTRA_NAME, name).putExtra(EXTRA_HOST, host);
+                .putExtra(EXTRA_NAME, name).putExtra(EXTRA_ROLE, role).putExtra(EXTRA_GAME, game);
         ctx.startForegroundService(i);
     }
 
@@ -97,7 +104,7 @@ public class TogetherService extends Service implements RelayClient.Listener {
             toggleMic();
             return START_NOT_STICKY;
         }
-        if (ACTION_START.equals(action) && relay == null) {
+        if (ACTION_START.equals(action) && !running) {
             begin(intent);
         }
         return START_NOT_STICKY;
@@ -105,7 +112,10 @@ public class TogetherService extends Service implements RelayClient.Listener {
 
     private void begin(Intent intent) {
         instance = this;
-        isHost = intent.getBooleanExtra(EXTRA_HOST, false);
+        running = true;
+        role = intent.getStringExtra(EXTRA_ROLE);
+        if (role == null) role = ROLE_GUEST;
+        isHost = ROLE_HOST.equals(role);
         room = intent.getStringExtra(EXTRA_ROOM);
         name = intent.getStringExtra(EXTRA_NAME);
         createChannel();
@@ -123,21 +133,29 @@ public class TogetherService extends Service implements RelayClient.Listener {
         multicastLock.setReferenceCounted(false);
         multicastLock.acquire();
 
-        relay = new RelayClient(intent.getStringExtra(EXTRA_SERVER), this);
-        voice = new VoiceEngine((frame, len) -> relay.sendBinary(frame, len, true));
-        voice.start();
+        String server = intent.getStringExtra(EXTRA_SERVER);
+        boolean useRelay = server != null && !server.trim().isEmpty() && room != null && !room.trim().isEmpty();
+        if (useRelay) relay = new RelayClient(server, this);
+        voice = new VoiceEngine((frame, len) -> {
+            if (relay != null) relay.sendBinary(frame, len, true);
+        });
+        if (useRelay) voice.start();
         try {
-            if (isHost) {
+            if (ROLE_DIRECT.equals(role)) {
+                directTunnel = new DirectTunnel(intent.getStringExtra(EXTRA_GAME));
+                directTunnel.start();
+            } else if (useRelay && isHost) {
                 hostTunnel = new HostTunnel(relay);
                 hostTunnel.start();
-            } else {
+            } else if (useRelay) {
                 guestTunnel = new GuestTunnel(relay);
                 guestTunnel.start();
             }
         } catch (Exception e) {
             error = "Не удалось открыть порт для мира: " + e.getMessage();
         }
-        relay.start();
+        if (relay != null) relay.start();
+        else status = "Голосовой чат выключен (не указан сервер или комната)";
 
         overlay = new OverlayButton(this, new OverlayButton.Callbacks() {
             @Override
@@ -161,14 +179,15 @@ public class TogetherService extends Service implements RelayClient.Listener {
 
         @Override
         public void run() {
-            if (relay == null) return;
+            if (!running) return;
+            boolean connected = relay != null && relay.isConnected();
             boolean othersTalking = false;
             synchronized (members) {
                 for (Member m : members.values()) if (voice.isPeerTalking(m.id)) othersTalking = true;
             }
-            int state = !relay.isConnected() ? OverlayButton.STATE_OFFLINE
+            int state = !connected ? OverlayButton.STATE_OFFLINE
                     : voice.isMicOn() ? OverlayButton.STATE_MIC_ON : OverlayButton.STATE_MIC_OFF;
-            overlay.update(state, voice.isSpeaking(), othersTalking, relay.isConnected() ? memberCount() + 1 : 0);
+            overlay.update(state, voice.isSpeaking(), othersTalking, connected ? memberCount() + 1 : 0);
             String n = notificationText();
             if (!n.equals(lastNotif)) {
                 lastNotif = n;
@@ -185,9 +204,11 @@ public class TogetherService extends Service implements RelayClient.Listener {
         if (voice != null) voice.stop();
         if (hostTunnel != null) hostTunnel.stop();
         if (guestTunnel != null) guestTunnel.stop();
+        if (directTunnel != null) directTunnel.stop();
         if (multicastLock != null && multicastLock.isHeld()) multicastLock.release();
         if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
         relay = null;
+        running = false;
         instance = null;
         stopForeground(STOP_FOREGROUND_REMOVE);
         stopSelf();
@@ -195,7 +216,7 @@ public class TogetherService extends Service implements RelayClient.Listener {
 
     @Override
     public void onDestroy() {
-        if (relay != null) shutdown();
+        if (running) shutdown();
         super.onDestroy();
     }
 
@@ -207,7 +228,7 @@ public class TogetherService extends Service implements RelayClient.Listener {
     // ------------------------------------------------------------ микрофон
 
     public void toggleMic() {
-        if (voice == null) return;
+        if (voice == null || relay == null) return;
         boolean on = !voice.isMicOn();
         voice.setMicOn(on);
         try {
@@ -344,6 +365,14 @@ public class TogetherService extends Service implements RelayClient.Listener {
     public String statusText() {
         StringBuilder b = new StringBuilder(status);
         if (error != null) b.append("\n⚠ ").append(error);
+        if (directTunnel != null) {
+            String w = directTunnel.getWorldInfo();
+            b.append("\nСервер ").append(directTunnel.getTarget()).append(": ")
+                    .append(w != null ? w + "\nОткрой Minecraft → Играть → Друзья → LAN-игры." : "не отвечает");
+            if (directTunnel.getSessionCount() > 0) b.append("\nСоединений с сервером: ").append(directTunnel.getSessionCount());
+            if (directTunnel.getPort() != RakNet.DEFAULT_PORT && directTunnel.getPort() != 0)
+                b.append("\n⚠ Порт 19132 занят — закрой свой мир в Minecraft и перезапусти.");
+        }
         if (relay != null && relay.isConnected()) {
             if (isHost) {
                 String w = hostTunnel != null ? hostTunnel.getWorldInfo() : null;
@@ -372,7 +401,8 @@ public class TogetherService extends Service implements RelayClient.Listener {
 
     private String notificationText() {
         String mic = voice != null && voice.isMicOn() ? "микрофон включён" : "микрофон выключен";
-        String conn = relay != null && relay.isConnected() ? "людей в комнате: " + (memberCount() + 1) : "нет связи";
+        String conn = relay == null ? "голос выключен"
+                : relay.isConnected() ? "людей в комнате: " + (memberCount() + 1) : "нет связи";
         return mic + " · " + conn;
     }
 
@@ -385,7 +415,7 @@ public class TogetherService extends Service implements RelayClient.Listener {
                 new Intent(this, TogetherService.class).setAction(ACTION_STOP), imm);
         return new Notification.Builder(this, CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_mic)
-                .setContentTitle((isHost ? "Хост" : "Гость") + " · комната «" + room + "»")
+                .setContentTitle(ROLE_DIRECT.equals(role) ? "Сервер по адресу" : (isHost ? "Хост" : "Гость") + " · комната «" + room + "»")
                 .setContentText(notificationText())
                 .setContentIntent(open)
                 .setOngoing(true)

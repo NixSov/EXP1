@@ -1,3 +1,13 @@
+# Моды и приложения для Minecraft PE (Bedrock 1.21.90+)
+
+| Проект | Файл | Описание |
+|---|---|---|
+| Пробуждение | `dist/Awakening.mcaddon` | Силы и способности по мотивам The Awakening (ниже) |
+| Приключения | `dist/Adventure.mcaddon` | Навигатор с картой, крюк-кошка, рюкзак, данжи — [описание](docs/ADVENTURE.md) |
+| MC Вместе | `dist/MCVmeste.apk` | Голосовой чат и игра по сети без Xbox/Realms — [описание](Together/README.md) |
+
+---
+
 # Пробуждение — аддон для Minecraft Bedrock (PE)
 
 Аналог Java-мода **The Awakening** для Minecraft Bedrock / Pocket Edition **1.21.90+**

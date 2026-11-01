@@ -1,0 +1,27 @@
+{
+  "resource_pack_name": "adventure",
+  "texture_name": "atlas.items",
+  "texture_data": {
+    "adv_navigator": {
+      "textures": "textures/items/adv/navigator"
+    },
+    "adv_backpack": {
+      "textures": "textures/items/adv/backpack"
+    },
+    "adv_grapple_1": {
+      "textures": "textures/items/adv/grapple_1"
+    },
+    "adv_grapple_2": {
+      "textures": "textures/items/adv/grapple_2"
+    },
+    "adv_grapple_3": {
+      "textures": "textures/items/adv/grapple_3"
+    },
+    "adv_grapple_4": {
+      "textures": "textures/items/adv/grapple_4"
+    },
+    "adv_grapple_5": {
+      "textures": "textures/items/adv/grapple_5"
+    }
+  }
+}

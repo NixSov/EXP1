@@ -31,9 +31,12 @@ public class MainActivity extends Activity {
     private static final int REQ_PERMS = 1;
 
     private SharedPreferences prefs;
-    private EditText server, room, name;
-    private RadioButton hostRadio;
-    private Button startBtn, micBtn, overlayBtn;
+    private static final String MINECRAFT = "com.mojang.minecraftpe";
+
+    private EditText server, room, name, game;
+    private RadioButton hostRadio, guestRadio, directRadio;
+    private TextView gameLabel;
+    private Button startBtn, serverBtn, launchBtn, micBtn, overlayBtn;
     private TextView status, people;
     private LinearLayout form;
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -107,7 +110,7 @@ public class MainActivity extends Activity {
         form.setOrientation(LinearLayout.VERTICAL);
         root.addView(form);
 
-        label(form, "Адрес сервера", 14, true);
+        label(form, "Адрес сервера «MC Вместе» (голос и туннель)", 14, true);
         server = field(form, "например: mc-together.onrender.com", "server", "");
         label(form, "Код комнаты (одинаковый у всех друзей)", 14, true);
         room = field(form, "например: nixsov", "room", "");
@@ -119,19 +122,42 @@ public class MainActivity extends Activity {
         hostRadio = new RadioButton(this);
         hostRadio.setText("Хост — мир открыт на моём телефоне");
         hostRadio.setId(View.generateViewId());
-        RadioButton guestRadio = new RadioButton(this);
+        guestRadio = new RadioButton(this);
         guestRadio.setText("Гость — подключаюсь к миру друга");
         guestRadio.setId(View.generateViewId());
+        directRadio = new RadioButton(this);
+        directRadio.setText("Сервер по адресу — хостинг или чужой сервер, без входа в Xbox");
+        directRadio.setId(View.generateViewId());
         roles.addView(hostRadio);
         roles.addView(guestRadio);
-        (prefs.getBoolean("host", false) ? hostRadio : guestRadio).setChecked(true);
+        roles.addView(directRadio);
+        String role = prefs.getString("role", prefs.getBoolean("host", false) ? TogetherService.ROLE_HOST : TogetherService.ROLE_GUEST);
+        (TogetherService.ROLE_HOST.equals(role) ? hostRadio : TogetherService.ROLE_DIRECT.equals(role) ? directRadio : guestRadio).setChecked(true);
         form.addView(roles);
+        roles.setOnCheckedChangeListener((g, id) -> refresh());
+
+        gameLabel = label(form, "Адрес игрового сервера (IP:порт)", 14, true);
+        game = field(form, "например: myserver.freemchost.com:19132", "game", "");
+
+        serverBtn = new Button(this);
+        serverBtn.setText("▶ Запустить сервер и открыть Minecraft");
+        serverBtn.setOnClickListener(v -> {
+            hostRadio.setChecked(true);
+            pendingLaunch = true;
+            onStartStop();
+        });
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.topMargin = dp(16);
+        root.addView(serverBtn, lp);
 
         startBtn = new Button(this);
         startBtn.setOnClickListener(v -> onStartStop());
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-        lp.topMargin = dp(16);
-        root.addView(startBtn, lp);
+        root.addView(startBtn, new LinearLayout.LayoutParams(-1, -2));
+
+        launchBtn = new Button(this);
+        launchBtn.setText("Открыть Minecraft");
+        launchBtn.setOnClickListener(v -> openMinecraft());
+        root.addView(launchBtn, new LinearLayout.LayoutParams(-1, -2));
 
         micBtn = new Button(this);
         micBtn.setOnClickListener(v -> {
@@ -153,13 +179,17 @@ public class MainActivity extends Activity {
 
         label(root, "Как играть", 14, true);
         label(root,
-                "Хост:\n"
-                        + "1. Открой свой мир в Minecraft. В настройках мира включи «Многопользовательская игра» и «Видимый для игроков LAN».\n"
-                        + "2. Здесь выбери «Хост» и нажми «Подключиться».\n\n"
+                "Хост (сервер на твоём телефоне):\n"
+                        + "1. Нажми «Запустить сервер и открыть Minecraft».\n"
+                        + "2. Открой свой мир. В настройках мира включи «Многопользовательская игра» и «Видимый для игроков LAN».\n"
+                        + "   Сервер работает, пока мир открыт.\n\n"
                         + "Гость:\n"
                         + "1. Выбери «Гость», введи тот же сервер и код комнаты, нажми «Подключиться».\n"
                         + "2. Открой Minecraft → Играть → Друзья. Мир хоста появится в разделе «LAN-игры».\n"
                         + "   Нужен включённый Wi-Fi (подойдёт любой, даже без связи с хостом).\n\n"
+                        + "Сервер по адресу (например, бесплатный хостинг):\n"
+                        + "1. Введи адрес игрового сервера. Сервер и комнату «MC Вместе» можно оставить — тогда будет и голосовой чат.\n"
+                        + "2. Нажми «Подключиться», открой Minecraft → Друзья → LAN-игры.\n\n"
                         + "Кнопка с микрофоном поверх игры: нажатие — вкл/выкл микрофон, перетаскивание — переместить, "
                         + "долгое нажатие — открыть это приложение.\n"
                         + "Совет: играй в наушниках, иначе друзья будут слышать звуки игры.",
@@ -171,6 +201,11 @@ public class MainActivity extends Activity {
         TogetherService s = TogetherService.instance;
         boolean running = s != null;
         startBtn.setText(running ? "Отключиться" : "Подключиться");
+        serverBtn.setVisibility(running ? View.GONE : View.VISIBLE);
+        launchBtn.setVisibility(running ? View.VISIBLE : View.GONE);
+        boolean direct = directRadio.isChecked();
+        gameLabel.setVisibility(direct ? View.VISIBLE : View.GONE);
+        game.setVisibility(direct ? View.VISIBLE : View.GONE);
         form.setAlpha(running ? 0.5f : 1f);
         setEnabledDeep(form, !running);
         micBtn.setVisibility(running ? View.VISIBLE : View.GONE);
@@ -206,12 +241,20 @@ public class MainActivity extends Activity {
         String srv = server.getText().toString().trim();
         String rm = room.getText().toString().trim();
         String nm = name.getText().toString().trim();
-        if (srv.isEmpty() || rm.isEmpty() || nm.isEmpty()) {
+        String gm = game.getText().toString().trim();
+        if (directRadio.isChecked()) {
+            if (gm.isEmpty() || nm.isEmpty()) {
+                Toast.makeText(this, "Заполни адрес игрового сервера и ник", Toast.LENGTH_LONG).show();
+                pendingLaunch = false;
+                return;
+            }
+        } else if (srv.isEmpty() || rm.isEmpty() || nm.isEmpty()) {
             Toast.makeText(this, "Заполни сервер, код комнаты и ник", Toast.LENGTH_LONG).show();
+            pendingLaunch = false;
             return;
         }
         prefs.edit().putString("server", srv).putString("room", rm).putString("name", nm)
-                .putBoolean("host", hostRadio.isChecked()).apply();
+                .putString("game", gm).putString("role", currentRole()).apply();
 
         List<String> need = new ArrayList<>();
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
@@ -232,6 +275,7 @@ public class MainActivity extends Activity {
         if (code != REQ_PERMS) return;
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             Toast.makeText(this, "Без доступа к микрофону голосовой чат не работает", Toast.LENGTH_LONG).show();
+            pendingLaunch = false;
             return;
         }
         launch();
@@ -243,7 +287,28 @@ public class MainActivity extends Activity {
                     Toast.LENGTH_LONG).show();
         }
         TogetherService.start(this, server.getText().toString().trim(), room.getText().toString().trim(),
-                name.getText().toString().trim(), hostRadio.isChecked());
+                name.getText().toString().trim(), currentRole(), game.getText().toString().trim());
         handler.postDelayed(this::refresh, 300);
+        if (pendingLaunch) {
+            pendingLaunch = false;
+            handler.postDelayed(this::openMinecraft, 800);
+        }
+    }
+
+    private boolean pendingLaunch;
+
+    private String currentRole() {
+        if (hostRadio.isChecked()) return TogetherService.ROLE_HOST;
+        if (directRadio.isChecked()) return TogetherService.ROLE_DIRECT;
+        return TogetherService.ROLE_GUEST;
+    }
+
+    private void openMinecraft() {
+        Intent i = getPackageManager().getLaunchIntentForPackage(MINECRAFT);
+        if (i == null) {
+            Toast.makeText(this, "Minecraft не найден на этом телефоне", Toast.LENGTH_LONG).show();
+            return;
+        }
+        startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
     }
 }

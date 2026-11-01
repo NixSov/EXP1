@@ -1,0 +1,29 @@
+{
+  "format_version": "1.20.10",
+  "minecraft:recipe_shaped": {
+    "description": {
+      "identifier": "adv:backpack"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "pattern": [
+      "LSL",
+      "LCL",
+      "LLL"
+    ],
+    "key": {
+      "L": "minecraft:leather",
+      "S": "minecraft:string",
+      "C": "minecraft:chest"
+    },
+    "unlock": [
+      {
+        "item": "minecraft:leather"
+      }
+    ],
+    "result": {
+      "item": "adv:backpack"
+    }
+  }
+}
