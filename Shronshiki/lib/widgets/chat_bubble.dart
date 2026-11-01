@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'linked_text.dart';
+
 /// Сообщение в чате: своё — справа цветом темы, чужое — слева с именем.
 class ChatBubble extends StatelessWidget {
   const ChatBubble({
@@ -54,9 +56,11 @@ class ChatBubble extends StatelessWidget {
                               color: scheme.primary,
                               fontWeight: FontWeight.w600,
                             )),
-                  SelectableText(
+                  LinkedText(
                     body,
                     style: TextStyle(color: mine ? scheme.onPrimary : scheme.onSurface),
+                    // На своём (цветном) пузыре ссылка — цветом текста, на чужом — цветом темы.
+                    linkColor: mine ? scheme.onPrimary : scheme.primary,
                   ),
                   const SizedBox(height: 2),
                   Text(
