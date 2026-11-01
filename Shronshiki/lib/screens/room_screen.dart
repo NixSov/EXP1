@@ -74,6 +74,12 @@ class _RoomScreenState extends State<RoomScreen> {
           ],
         ),
         actions: [
+          if (_call.status == CallStatus.inRoom)
+            IconButton(
+              tooltip: 'Обновить подключение',
+              icon: const Icon(Icons.sync),
+              onPressed: _call.reconnect,
+            ),
           IconButton(
             tooltip: 'Пригласить',
             icon: const Icon(Icons.person_add_alt_1_outlined),
@@ -345,12 +351,6 @@ class _RoomScreenState extends State<RoomScreen> {
                   active: _call.sharingScreen,
                   onPressed: _toggleScreenShare,
                 ),
-              _ControlButton(
-                icon: Icons.sync,
-                label: 'Обновить',
-                active: false,
-                onPressed: _call.reconnect,
-              ),
               _ControlButton(
                 icon: Icons.call_end,
                 label: 'Выйти',
