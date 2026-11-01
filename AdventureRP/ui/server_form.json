@@ -1,21 +1,32 @@
 {
   "namespace": "server_form",
-
   "long_form": {
     "type": "panel",
-    "size": [ "100%", "100%" ],
+    "size": [
+      "100%",
+      "100%"
+    ],
     "controls": [
       {
         "long_form@common_dialogs.main_panel_no_buttons": {
           "$title_panel": "common_dialogs.standard_title_label",
-          "$title_size": [ "100% - 14px", 10 ],
-          "size": [ 225, 200 ],
+          "$title_size": [
+            "100% - 14px",
+            10
+          ],
+          "size": [
+            225,
+            200
+          ],
           "$text_name": "#title_text",
           "$title_text_binding_type": "none",
           "$child_control": "server_form.long_form_panel",
           "layer": 2,
           "bindings": [
-            { "binding_type": "global", "binding_name": "#title_text" },
+            {
+              "binding_type": "global",
+              "binding_name": "#title_text"
+            },
             {
               "binding_type": "view",
               "source_property_name": "((#title_text - '§a§d§v') = #title_text)",
@@ -27,7 +38,10 @@
       {
         "adv_map_form@server_form.adv_map_form": {
           "bindings": [
-            { "binding_type": "global", "binding_name": "#title_text" },
+            {
+              "binding_type": "global",
+              "binding_name": "#title_text"
+            },
             {
               "binding_type": "view",
               "source_property_name": "(not ((#title_text - '§a§d§v') = #title_text))",
@@ -38,17 +52,22 @@
       }
     ]
   },
-
   "adv_map_form": {
     "type": "panel",
-    "size": [ 330, 212 ],
+    "size": [
+      350,
+      214
+    ],
     "layer": 2,
     "controls": [
       {
         "adv_bg": {
           "type": "image",
           "texture": "textures/ui/adv/panel_bg",
-          "size": [ "100%", "100%" ],
+          "size": [
+            "100%",
+            "100%"
+          ],
           "layer": 0
         }
       },
@@ -56,34 +75,87 @@
         "adv_title": {
           "type": "label",
           "text": "#title_text",
-          "color": [ 1, 1, 1 ],
+          "color": [
+            1,
+            1,
+            1
+          ],
           "shadow": true,
           "anchor_from": "top_middle",
           "anchor_to": "top_middle",
-          "offset": [ 0, 6 ],
+          "offset": [
+            0,
+            6
+          ],
           "layer": 3,
-          "bindings": [ { "binding_type": "global", "binding_name": "#title_text" } ]
+          "bindings": [
+            {
+              "binding_type": "global",
+              "binding_name": "#title_text"
+            }
+          ]
         }
       },
       {
         "adv_close": {
           "type": "button",
-          "size": [ 16, 16 ],
+          "size": [
+            16,
+            16
+          ],
           "anchor_from": "top_right",
           "anchor_to": "top_right",
-          "offset": [ -4, 3 ],
+          "offset": [
+            -4,
+            3
+          ],
           "layer": 3,
           "default_control": "default",
           "hover_control": "hover",
           "pressed_control": "pressed",
           "button_mappings": [
-            { "from_button_id": "button.menu_select", "to_button_id": "button.menu_exit", "mapping_type": "pressed" },
-            { "from_button_id": "button.menu_ok", "to_button_id": "button.menu_exit", "mapping_type": "focused" }
+            {
+              "from_button_id": "button.menu_select",
+              "to_button_id": "button.menu_exit",
+              "mapping_type": "pressed"
+            },
+            {
+              "from_button_id": "button.menu_ok",
+              "to_button_id": "button.menu_exit",
+              "mapping_type": "focused"
+            }
           ],
           "controls": [
-            { "default": { "type": "image", "texture": "textures/ui/adv/close", "size": [ "100%", "100%" ] } },
-            { "hover": { "type": "image", "texture": "textures/ui/adv/close_hover", "size": [ "100%", "100%" ] } },
-            { "pressed": { "type": "image", "texture": "textures/ui/adv/close_hover", "size": [ "100%", "100%" ] } }
+            {
+              "default": {
+                "type": "image",
+                "texture": "textures/ui/adv/close",
+                "size": [
+                  "100%",
+                  "100%"
+                ]
+              }
+            },
+            {
+              "hover": {
+                "type": "image",
+                "texture": "textures/ui/adv/close_hover",
+                "size": [
+                  "100%",
+                  "100%"
+                ]
+              }
+            },
+            {
+              "pressed": {
+                "type": "image",
+                "texture": "textures/ui/adv/close_hover",
+                "size": [
+                  "100%",
+                  "100%"
+                ]
+              }
+            }
           ]
         }
       },
@@ -91,37 +163,1830 @@
         "adv_info": {
           "type": "label",
           "text": "#form_text",
-          "color": [ 0.85, 0.85, 0.85 ],
+          "color": [
+            0.85,
+            0.85,
+            0.85
+          ],
           "font_scale_factor": 0.8,
-          "size": [ "100% - 16px", "default" ],
+          "size": [
+            "100% - 16px",
+            "default"
+          ],
           "anchor_from": "top_left",
           "anchor_to": "top_left",
-          "offset": [ 8, 20 ],
+          "offset": [
+            8,
+            20
+          ],
           "layer": 3,
-          "bindings": [ { "binding_name": "#form_text" } ]
+          "bindings": [
+            {
+              "binding_name": "#form_text"
+            }
+          ]
         }
       },
       {
         "adv_map_frame": {
           "type": "image",
           "texture": "textures/ui/adv/map_frame",
-          "size": [ 201, 147 ],
+          "size": [
+            222,
+            162
+          ],
           "anchor_from": "bottom_left",
           "anchor_to": "bottom_left",
-          "offset": [ 8, -8 ],
+          "offset": [
+            8,
+            -8
+          ],
           "layer": 2,
           "controls": [
             {
-              "adv_map_grid": {
-                "type": "grid",
-                "size": [ 189, 135 ],
+              "adv_map_rows": {
+                "type": "stack_panel",
+                "orientation": "vertical",
+                "size": [
+                  210,
+                  150
+                ],
                 "anchor_from": "center",
                 "anchor_to": "center",
-                "grid_dimensions": [ 21, 15 ],
-                "grid_item_template": "server_form.adv_map_cell",
-                "grid_fill_direction": "horizontal",
+                "layer": 3,
                 "collection_name": "form_buttons",
-                "layer": 3
+                "controls": [
+                  {
+                    "row0": {
+                      "type": "stack_panel",
+                      "orientation": "horizontal",
+                      "size": [
+                        210,
+                        10
+                      ],
+                      "collection_name": "form_buttons",
+                      "controls": [
+                        {
+                          "c0@server_form.adv_map_cell": {
+                            "collection_index": 0
+                          }
+                        },
+                        {
+                          "c1@server_form.adv_map_cell": {
+                            "collection_index": 1
+                          }
+                        },
+                        {
+                          "c2@server_form.adv_map_cell": {
+                            "collection_index": 2
+                          }
+                        },
+                        {
+                          "c3@server_form.adv_map_cell": {
+                            "collection_index": 3
+                          }
+                        },
+                        {
+                          "c4@server_form.adv_map_cell": {
+                            "collection_index": 4
+                          }
+                        },
+                        {
+                          "c5@server_form.adv_map_cell": {
+                            "collection_index": 5
+                          }
+                        },
+                        {
+                          "c6@server_form.adv_map_cell": {
+                            "collection_index": 6
+                          }
+                        },
+                        {
+                          "c7@server_form.adv_map_cell": {
+                            "collection_index": 7
+                          }
+                        },
+                        {
+                          "c8@server_form.adv_map_cell": {
+                            "collection_index": 8
+                          }
+                        },
+                        {
+                          "c9@server_form.adv_map_cell": {
+                            "collection_index": 9
+                          }
+                        },
+                        {
+                          "c10@server_form.adv_map_cell": {
+                            "collection_index": 10
+                          }
+                        },
+                        {
+                          "c11@server_form.adv_map_cell": {
+                            "collection_index": 11
+                          }
+                        },
+                        {
+                          "c12@server_form.adv_map_cell": {
+                            "collection_index": 12
+                          }
+                        },
+                        {
+                          "c13@server_form.adv_map_cell": {
+                            "collection_index": 13
+                          }
+                        },
+                        {
+                          "c14@server_form.adv_map_cell": {
+                            "collection_index": 14
+                          }
+                        },
+                        {
+                          "c15@server_form.adv_map_cell": {
+                            "collection_index": 15
+                          }
+                        },
+                        {
+                          "c16@server_form.adv_map_cell": {
+                            "collection_index": 16
+                          }
+                        },
+                        {
+                          "c17@server_form.adv_map_cell": {
+                            "collection_index": 17
+                          }
+                        },
+                        {
+                          "c18@server_form.adv_map_cell": {
+                            "collection_index": 18
+                          }
+                        },
+                        {
+                          "c19@server_form.adv_map_cell": {
+                            "collection_index": 19
+                          }
+                        },
+                        {
+                          "c20@server_form.adv_map_cell": {
+                            "collection_index": 20
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "row1": {
+                      "type": "stack_panel",
+                      "orientation": "horizontal",
+                      "size": [
+                        210,
+                        10
+                      ],
+                      "collection_name": "form_buttons",
+                      "controls": [
+                        {
+                          "c21@server_form.adv_map_cell": {
+                            "collection_index": 21
+                          }
+                        },
+                        {
+                          "c22@server_form.adv_map_cell": {
+                            "collection_index": 22
+                          }
+                        },
+                        {
+                          "c23@server_form.adv_map_cell": {
+                            "collection_index": 23
+                          }
+                        },
+                        {
+                          "c24@server_form.adv_map_cell": {
+                            "collection_index": 24
+                          }
+                        },
+                        {
+                          "c25@server_form.adv_map_cell": {
+                            "collection_index": 25
+                          }
+                        },
+                        {
+                          "c26@server_form.adv_map_cell": {
+                            "collection_index": 26
+                          }
+                        },
+                        {
+                          "c27@server_form.adv_map_cell": {
+                            "collection_index": 27
+                          }
+                        },
+                        {
+                          "c28@server_form.adv_map_cell": {
+                            "collection_index": 28
+                          }
+                        },
+                        {
+                          "c29@server_form.adv_map_cell": {
+                            "collection_index": 29
+                          }
+                        },
+                        {
+                          "c30@server_form.adv_map_cell": {
+                            "collection_index": 30
+                          }
+                        },
+                        {
+                          "c31@server_form.adv_map_cell": {
+                            "collection_index": 31
+                          }
+                        },
+                        {
+                          "c32@server_form.adv_map_cell": {
+                            "collection_index": 32
+                          }
+                        },
+                        {
+                          "c33@server_form.adv_map_cell": {
+                            "collection_index": 33
+                          }
+                        },
+                        {
+                          "c34@server_form.adv_map_cell": {
+                            "collection_index": 34
+                          }
+                        },
+                        {
+                          "c35@server_form.adv_map_cell": {
+                            "collection_index": 35
+                          }
+                        },
+                        {
+                          "c36@server_form.adv_map_cell": {
+                            "collection_index": 36
+                          }
+                        },
+                        {
+                          "c37@server_form.adv_map_cell": {
+                            "collection_index": 37
+                          }
+                        },
+                        {
+                          "c38@server_form.adv_map_cell": {
+                            "collection_index": 38
+                          }
+                        },
+                        {
+                          "c39@server_form.adv_map_cell": {
+                            "collection_index": 39
+                          }
+                        },
+                        {
+                          "c40@server_form.adv_map_cell": {
+                            "collection_index": 40
+                          }
+                        },
+                        {
+                          "c41@server_form.adv_map_cell": {
+                            "collection_index": 41
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "row2": {
+                      "type": "stack_panel",
+                      "orientation": "horizontal",
+                      "size": [
+                        210,
+                        10
+                      ],
+                      "collection_name": "form_buttons",
+                      "controls": [
+                        {
+                          "c42@server_form.adv_map_cell": {
+                            "collection_index": 42
+                          }
+                        },
+                        {
+                          "c43@server_form.adv_map_cell": {
+                            "collection_index": 43
+                          }
+                        },
+                        {
+                          "c44@server_form.adv_map_cell": {
+                            "collection_index": 44
+                          }
+                        },
+                        {
+                          "c45@server_form.adv_map_cell": {
+                            "collection_index": 45
+                          }
+                        },
+                        {
+                          "c46@server_form.adv_map_cell": {
+                            "collection_index": 46
+                          }
+                        },
+                        {
+                          "c47@server_form.adv_map_cell": {
+                            "collection_index": 47
+                          }
+                        },
+                        {
+                          "c48@server_form.adv_map_cell": {
+                            "collection_index": 48
+                          }
+                        },
+                        {
+                          "c49@server_form.adv_map_cell": {
+                            "collection_index": 49
+                          }
+                        },
+                        {
+                          "c50@server_form.adv_map_cell": {
+                            "collection_index": 50
+                          }
+                        },
+                        {
+                          "c51@server_form.adv_map_cell": {
+                            "collection_index": 51
+                          }
+                        },
+                        {
+                          "c52@server_form.adv_map_cell": {
+                            "collection_index": 52
+                          }
+                        },
+                        {
+                          "c53@server_form.adv_map_cell": {
+                            "collection_index": 53
+                          }
+                        },
+                        {
+                          "c54@server_form.adv_map_cell": {
+                            "collection_index": 54
+                          }
+                        },
+                        {
+                          "c55@server_form.adv_map_cell": {
+                            "collection_index": 55
+                          }
+                        },
+                        {
+                          "c56@server_form.adv_map_cell": {
+                            "collection_index": 56
+                          }
+                        },
+                        {
+                          "c57@server_form.adv_map_cell": {
+                            "collection_index": 57
+                          }
+                        },
+                        {
+                          "c58@server_form.adv_map_cell": {
+                            "collection_index": 58
+                          }
+                        },
+                        {
+                          "c59@server_form.adv_map_cell": {
+                            "collection_index": 59
+                          }
+                        },
+                        {
+                          "c60@server_form.adv_map_cell": {
+                            "collection_index": 60
+                          }
+                        },
+                        {
+                          "c61@server_form.adv_map_cell": {
+                            "collection_index": 61
+                          }
+                        },
+                        {
+                          "c62@server_form.adv_map_cell": {
+                            "collection_index": 62
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "row3": {
+                      "type": "stack_panel",
+                      "orientation": "horizontal",
+                      "size": [
+                        210,
+                        10
+                      ],
+                      "collection_name": "form_buttons",
+                      "controls": [
+                        {
+                          "c63@server_form.adv_map_cell": {
+                            "collection_index": 63
+                          }
+                        },
+                        {
+                          "c64@server_form.adv_map_cell": {
+                            "collection_index": 64
+                          }
+                        },
+                        {
+                          "c65@server_form.adv_map_cell": {
+                            "collection_index": 65
+                          }
+                        },
+                        {
+                          "c66@server_form.adv_map_cell": {
+                            "collection_index": 66
+                          }
+                        },
+                        {
+                          "c67@server_form.adv_map_cell": {
+                            "collection_index": 67
+                          }
+                        },
+                        {
+                          "c68@server_form.adv_map_cell": {
+                            "collection_index": 68
+                          }
+                        },
+                        {
+                          "c69@server_form.adv_map_cell": {
+                            "collection_index": 69
+                          }
+                        },
+                        {
+                          "c70@server_form.adv_map_cell": {
+                            "collection_index": 70
+                          }
+                        },
+                        {
+                          "c71@server_form.adv_map_cell": {
+                            "collection_index": 71
+                          }
+                        },
+                        {
+                          "c72@server_form.adv_map_cell": {
+                            "collection_index": 72
+                          }
+                        },
+                        {
+                          "c73@server_form.adv_map_cell": {
+                            "collection_index": 73
+                          }
+                        },
+                        {
+                          "c74@server_form.adv_map_cell": {
+                            "collection_index": 74
+                          }
+                        },
+                        {
+                          "c75@server_form.adv_map_cell": {
+                            "collection_index": 75
+                          }
+                        },
+                        {
+                          "c76@server_form.adv_map_cell": {
+                            "collection_index": 76
+                          }
+                        },
+                        {
+                          "c77@server_form.adv_map_cell": {
+                            "collection_index": 77
+                          }
+                        },
+                        {
+                          "c78@server_form.adv_map_cell": {
+                            "collection_index": 78
+                          }
+                        },
+                        {
+                          "c79@server_form.adv_map_cell": {
+                            "collection_index": 79
+                          }
+                        },
+                        {
+                          "c80@server_form.adv_map_cell": {
+                            "collection_index": 80
+                          }
+                        },
+                        {
+                          "c81@server_form.adv_map_cell": {
+                            "collection_index": 81
+                          }
+                        },
+                        {
+                          "c82@server_form.adv_map_cell": {
+                            "collection_index": 82
+                          }
+                        },
+                        {
+                          "c83@server_form.adv_map_cell": {
+                            "collection_index": 83
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "row4": {
+                      "type": "stack_panel",
+                      "orientation": "horizontal",
+                      "size": [
+                        210,
+                        10
+                      ],
+                      "collection_name": "form_buttons",
+                      "controls": [
+                        {
+                          "c84@server_form.adv_map_cell": {
+                            "collection_index": 84
+                          }
+                        },
+                        {
+                          "c85@server_form.adv_map_cell": {
+                            "collection_index": 85
+                          }
+                        },
+                        {
+                          "c86@server_form.adv_map_cell": {
+                            "collection_index": 86
+                          }
+                        },
+                        {
+                          "c87@server_form.adv_map_cell": {
+                            "collection_index": 87
+                          }
+                        },
+                        {
+                          "c88@server_form.adv_map_cell": {
+                            "collection_index": 88
+                          }
+                        },
+                        {
+                          "c89@server_form.adv_map_cell": {
+                            "collection_index": 89
+                          }
+                        },
+                        {
+                          "c90@server_form.adv_map_cell": {
+                            "collection_index": 90
+                          }
+                        },
+                        {
+                          "c91@server_form.adv_map_cell": {
+                            "collection_index": 91
+                          }
+                        },
+                        {
+                          "c92@server_form.adv_map_cell": {
+                            "collection_index": 92
+                          }
+                        },
+                        {
+                          "c93@server_form.adv_map_cell": {
+                            "collection_index": 93
+                          }
+                        },
+                        {
+                          "c94@server_form.adv_map_cell": {
+                            "collection_index": 94
+                          }
+                        },
+                        {
+                          "c95@server_form.adv_map_cell": {
+                            "collection_index": 95
+                          }
+                        },
+                        {
+                          "c96@server_form.adv_map_cell": {
+                            "collection_index": 96
+                          }
+                        },
+                        {
+                          "c97@server_form.adv_map_cell": {
+                            "collection_index": 97
+                          }
+                        },
+                        {
+                          "c98@server_form.adv_map_cell": {
+                            "collection_index": 98
+                          }
+                        },
+                        {
+                          "c99@server_form.adv_map_cell": {
+                            "collection_index": 99
+                          }
+                        },
+                        {
+                          "c100@server_form.adv_map_cell": {
+                            "collection_index": 100
+                          }
+                        },
+                        {
+                          "c101@server_form.adv_map_cell": {
+                            "collection_index": 101
+                          }
+                        },
+                        {
+                          "c102@server_form.adv_map_cell": {
+                            "collection_index": 102
+                          }
+                        },
+                        {
+                          "c103@server_form.adv_map_cell": {
+                            "collection_index": 103
+                          }
+                        },
+                        {
+                          "c104@server_form.adv_map_cell": {
+                            "collection_index": 104
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "row5": {
+                      "type": "stack_panel",
+                      "orientation": "horizontal",
+                      "size": [
+                        210,
+                        10
+                      ],
+                      "collection_name": "form_buttons",
+                      "controls": [
+                        {
+                          "c105@server_form.adv_map_cell": {
+                            "collection_index": 105
+                          }
+                        },
+                        {
+                          "c106@server_form.adv_map_cell": {
+                            "collection_index": 106
+                          }
+                        },
+                        {
+                          "c107@server_form.adv_map_cell": {
+                            "collection_index": 107
+                          }
+                        },
+                        {
+                          "c108@server_form.adv_map_cell": {
+                            "collection_index": 108
+                          }
+                        },
+                        {
+                          "c109@server_form.adv_map_cell": {
+                            "collection_index": 109
+                          }
+                        },
+                        {
+                          "c110@server_form.adv_map_cell": {
+                            "collection_index": 110
+                          }
+                        },
+                        {
+                          "c111@server_form.adv_map_cell": {
+                            "collection_index": 111
+                          }
+                        },
+                        {
+                          "c112@server_form.adv_map_cell": {
+                            "collection_index": 112
+                          }
+                        },
+                        {
+                          "c113@server_form.adv_map_cell": {
+                            "collection_index": 113
+                          }
+                        },
+                        {
+                          "c114@server_form.adv_map_cell": {
+                            "collection_index": 114
+                          }
+                        },
+                        {
+                          "c115@server_form.adv_map_cell": {
+                            "collection_index": 115
+                          }
+                        },
+                        {
+                          "c116@server_form.adv_map_cell": {
+                            "collection_index": 116
+                          }
+                        },
+                        {
+                          "c117@server_form.adv_map_cell": {
+                            "collection_index": 117
+                          }
+                        },
+                        {
+                          "c118@server_form.adv_map_cell": {
+                            "collection_index": 118
+                          }
+                        },
+                        {
+                          "c119@server_form.adv_map_cell": {
+                            "collection_index": 119
+                          }
+                        },
+                        {
+                          "c120@server_form.adv_map_cell": {
+                            "collection_index": 120
+                          }
+                        },
+                        {
+                          "c121@server_form.adv_map_cell": {
+                            "collection_index": 121
+                          }
+                        },
+                        {
+                          "c122@server_form.adv_map_cell": {
+                            "collection_index": 122
+                          }
+                        },
+                        {
+                          "c123@server_form.adv_map_cell": {
+                            "collection_index": 123
+                          }
+                        },
+                        {
+                          "c124@server_form.adv_map_cell": {
+                            "collection_index": 124
+                          }
+                        },
+                        {
+                          "c125@server_form.adv_map_cell": {
+                            "collection_index": 125
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "row6": {
+                      "type": "stack_panel",
+                      "orientation": "horizontal",
+                      "size": [
+                        210,
+                        10
+                      ],
+                      "collection_name": "form_buttons",
+                      "controls": [
+                        {
+                          "c126@server_form.adv_map_cell": {
+                            "collection_index": 126
+                          }
+                        },
+                        {
+                          "c127@server_form.adv_map_cell": {
+                            "collection_index": 127
+                          }
+                        },
+                        {
+                          "c128@server_form.adv_map_cell": {
+                            "collection_index": 128
+                          }
+                        },
+                        {
+                          "c129@server_form.adv_map_cell": {
+                            "collection_index": 129
+                          }
+                        },
+                        {
+                          "c130@server_form.adv_map_cell": {
+                            "collection_index": 130
+                          }
+                        },
+                        {
+                          "c131@server_form.adv_map_cell": {
+                            "collection_index": 131
+                          }
+                        },
+                        {
+                          "c132@server_form.adv_map_cell": {
+                            "collection_index": 132
+                          }
+                        },
+                        {
+                          "c133@server_form.adv_map_cell": {
+                            "collection_index": 133
+                          }
+                        },
+                        {
+                          "c134@server_form.adv_map_cell": {
+                            "collection_index": 134
+                          }
+                        },
+                        {
+                          "c135@server_form.adv_map_cell": {
+                            "collection_index": 135
+                          }
+                        },
+                        {
+                          "c136@server_form.adv_map_cell": {
+                            "collection_index": 136
+                          }
+                        },
+                        {
+                          "c137@server_form.adv_map_cell": {
+                            "collection_index": 137
+                          }
+                        },
+                        {
+                          "c138@server_form.adv_map_cell": {
+                            "collection_index": 138
+                          }
+                        },
+                        {
+                          "c139@server_form.adv_map_cell": {
+                            "collection_index": 139
+                          }
+                        },
+                        {
+                          "c140@server_form.adv_map_cell": {
+                            "collection_index": 140
+                          }
+                        },
+                        {
+                          "c141@server_form.adv_map_cell": {
+                            "collection_index": 141
+                          }
+                        },
+                        {
+                          "c142@server_form.adv_map_cell": {
+                            "collection_index": 142
+                          }
+                        },
+                        {
+                          "c143@server_form.adv_map_cell": {
+                            "collection_index": 143
+                          }
+                        },
+                        {
+                          "c144@server_form.adv_map_cell": {
+                            "collection_index": 144
+                          }
+                        },
+                        {
+                          "c145@server_form.adv_map_cell": {
+                            "collection_index": 145
+                          }
+                        },
+                        {
+                          "c146@server_form.adv_map_cell": {
+                            "collection_index": 146
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "row7": {
+                      "type": "stack_panel",
+                      "orientation": "horizontal",
+                      "size": [
+                        210,
+                        10
+                      ],
+                      "collection_name": "form_buttons",
+                      "controls": [
+                        {
+                          "c147@server_form.adv_map_cell": {
+                            "collection_index": 147
+                          }
+                        },
+                        {
+                          "c148@server_form.adv_map_cell": {
+                            "collection_index": 148
+                          }
+                        },
+                        {
+                          "c149@server_form.adv_map_cell": {
+                            "collection_index": 149
+                          }
+                        },
+                        {
+                          "c150@server_form.adv_map_cell": {
+                            "collection_index": 150
+                          }
+                        },
+                        {
+                          "c151@server_form.adv_map_cell": {
+                            "collection_index": 151
+                          }
+                        },
+                        {
+                          "c152@server_form.adv_map_cell": {
+                            "collection_index": 152
+                          }
+                        },
+                        {
+                          "c153@server_form.adv_map_cell": {
+                            "collection_index": 153
+                          }
+                        },
+                        {
+                          "c154@server_form.adv_map_cell": {
+                            "collection_index": 154
+                          }
+                        },
+                        {
+                          "c155@server_form.adv_map_cell": {
+                            "collection_index": 155
+                          }
+                        },
+                        {
+                          "c156@server_form.adv_map_cell": {
+                            "collection_index": 156
+                          }
+                        },
+                        {
+                          "c157@server_form.adv_map_cell": {
+                            "collection_index": 157
+                          }
+                        },
+                        {
+                          "c158@server_form.adv_map_cell": {
+                            "collection_index": 158
+                          }
+                        },
+                        {
+                          "c159@server_form.adv_map_cell": {
+                            "collection_index": 159
+                          }
+                        },
+                        {
+                          "c160@server_form.adv_map_cell": {
+                            "collection_index": 160
+                          }
+                        },
+                        {
+                          "c161@server_form.adv_map_cell": {
+                            "collection_index": 161
+                          }
+                        },
+                        {
+                          "c162@server_form.adv_map_cell": {
+                            "collection_index": 162
+                          }
+                        },
+                        {
+                          "c163@server_form.adv_map_cell": {
+                            "collection_index": 163
+                          }
+                        },
+                        {
+                          "c164@server_form.adv_map_cell": {
+                            "collection_index": 164
+                          }
+                        },
+                        {
+                          "c165@server_form.adv_map_cell": {
+                            "collection_index": 165
+                          }
+                        },
+                        {
+                          "c166@server_form.adv_map_cell": {
+                            "collection_index": 166
+                          }
+                        },
+                        {
+                          "c167@server_form.adv_map_cell": {
+                            "collection_index": 167
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "row8": {
+                      "type": "stack_panel",
+                      "orientation": "horizontal",
+                      "size": [
+                        210,
+                        10
+                      ],
+                      "collection_name": "form_buttons",
+                      "controls": [
+                        {
+                          "c168@server_form.adv_map_cell": {
+                            "collection_index": 168
+                          }
+                        },
+                        {
+                          "c169@server_form.adv_map_cell": {
+                            "collection_index": 169
+                          }
+                        },
+                        {
+                          "c170@server_form.adv_map_cell": {
+                            "collection_index": 170
+                          }
+                        },
+                        {
+                          "c171@server_form.adv_map_cell": {
+                            "collection_index": 171
+                          }
+                        },
+                        {
+                          "c172@server_form.adv_map_cell": {
+                            "collection_index": 172
+                          }
+                        },
+                        {
+                          "c173@server_form.adv_map_cell": {
+                            "collection_index": 173
+                          }
+                        },
+                        {
+                          "c174@server_form.adv_map_cell": {
+                            "collection_index": 174
+                          }
+                        },
+                        {
+                          "c175@server_form.adv_map_cell": {
+                            "collection_index": 175
+                          }
+                        },
+                        {
+                          "c176@server_form.adv_map_cell": {
+                            "collection_index": 176
+                          }
+                        },
+                        {
+                          "c177@server_form.adv_map_cell": {
+                            "collection_index": 177
+                          }
+                        },
+                        {
+                          "c178@server_form.adv_map_cell": {
+                            "collection_index": 178
+                          }
+                        },
+                        {
+                          "c179@server_form.adv_map_cell": {
+                            "collection_index": 179
+                          }
+                        },
+                        {
+                          "c180@server_form.adv_map_cell": {
+                            "collection_index": 180
+                          }
+                        },
+                        {
+                          "c181@server_form.adv_map_cell": {
+                            "collection_index": 181
+                          }
+                        },
+                        {
+                          "c182@server_form.adv_map_cell": {
+                            "collection_index": 182
+                          }
+                        },
+                        {
+                          "c183@server_form.adv_map_cell": {
+                            "collection_index": 183
+                          }
+                        },
+                        {
+                          "c184@server_form.adv_map_cell": {
+                            "collection_index": 184
+                          }
+                        },
+                        {
+                          "c185@server_form.adv_map_cell": {
+                            "collection_index": 185
+                          }
+                        },
+                        {
+                          "c186@server_form.adv_map_cell": {
+                            "collection_index": 186
+                          }
+                        },
+                        {
+                          "c187@server_form.adv_map_cell": {
+                            "collection_index": 187
+                          }
+                        },
+                        {
+                          "c188@server_form.adv_map_cell": {
+                            "collection_index": 188
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "row9": {
+                      "type": "stack_panel",
+                      "orientation": "horizontal",
+                      "size": [
+                        210,
+                        10
+                      ],
+                      "collection_name": "form_buttons",
+                      "controls": [
+                        {
+                          "c189@server_form.adv_map_cell": {
+                            "collection_index": 189
+                          }
+                        },
+                        {
+                          "c190@server_form.adv_map_cell": {
+                            "collection_index": 190
+                          }
+                        },
+                        {
+                          "c191@server_form.adv_map_cell": {
+                            "collection_index": 191
+                          }
+                        },
+                        {
+                          "c192@server_form.adv_map_cell": {
+                            "collection_index": 192
+                          }
+                        },
+                        {
+                          "c193@server_form.adv_map_cell": {
+                            "collection_index": 193
+                          }
+                        },
+                        {
+                          "c194@server_form.adv_map_cell": {
+                            "collection_index": 194
+                          }
+                        },
+                        {
+                          "c195@server_form.adv_map_cell": {
+                            "collection_index": 195
+                          }
+                        },
+                        {
+                          "c196@server_form.adv_map_cell": {
+                            "collection_index": 196
+                          }
+                        },
+                        {
+                          "c197@server_form.adv_map_cell": {
+                            "collection_index": 197
+                          }
+                        },
+                        {
+                          "c198@server_form.adv_map_cell": {
+                            "collection_index": 198
+                          }
+                        },
+                        {
+                          "c199@server_form.adv_map_cell": {
+                            "collection_index": 199
+                          }
+                        },
+                        {
+                          "c200@server_form.adv_map_cell": {
+                            "collection_index": 200
+                          }
+                        },
+                        {
+                          "c201@server_form.adv_map_cell": {
+                            "collection_index": 201
+                          }
+                        },
+                        {
+                          "c202@server_form.adv_map_cell": {
+                            "collection_index": 202
+                          }
+                        },
+                        {
+                          "c203@server_form.adv_map_cell": {
+                            "collection_index": 203
+                          }
+                        },
+                        {
+                          "c204@server_form.adv_map_cell": {
+                            "collection_index": 204
+                          }
+                        },
+                        {
+                          "c205@server_form.adv_map_cell": {
+                            "collection_index": 205
+                          }
+                        },
+                        {
+                          "c206@server_form.adv_map_cell": {
+                            "collection_index": 206
+                          }
+                        },
+                        {
+                          "c207@server_form.adv_map_cell": {
+                            "collection_index": 207
+                          }
+                        },
+                        {
+                          "c208@server_form.adv_map_cell": {
+                            "collection_index": 208
+                          }
+                        },
+                        {
+                          "c209@server_form.adv_map_cell": {
+                            "collection_index": 209
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "row10": {
+                      "type": "stack_panel",
+                      "orientation": "horizontal",
+                      "size": [
+                        210,
+                        10
+                      ],
+                      "collection_name": "form_buttons",
+                      "controls": [
+                        {
+                          "c210@server_form.adv_map_cell": {
+                            "collection_index": 210
+                          }
+                        },
+                        {
+                          "c211@server_form.adv_map_cell": {
+                            "collection_index": 211
+                          }
+                        },
+                        {
+                          "c212@server_form.adv_map_cell": {
+                            "collection_index": 212
+                          }
+                        },
+                        {
+                          "c213@server_form.adv_map_cell": {
+                            "collection_index": 213
+                          }
+                        },
+                        {
+                          "c214@server_form.adv_map_cell": {
+                            "collection_index": 214
+                          }
+                        },
+                        {
+                          "c215@server_form.adv_map_cell": {
+                            "collection_index": 215
+                          }
+                        },
+                        {
+                          "c216@server_form.adv_map_cell": {
+                            "collection_index": 216
+                          }
+                        },
+                        {
+                          "c217@server_form.adv_map_cell": {
+                            "collection_index": 217
+                          }
+                        },
+                        {
+                          "c218@server_form.adv_map_cell": {
+                            "collection_index": 218
+                          }
+                        },
+                        {
+                          "c219@server_form.adv_map_cell": {
+                            "collection_index": 219
+                          }
+                        },
+                        {
+                          "c220@server_form.adv_map_cell": {
+                            "collection_index": 220
+                          }
+                        },
+                        {
+                          "c221@server_form.adv_map_cell": {
+                            "collection_index": 221
+                          }
+                        },
+                        {
+                          "c222@server_form.adv_map_cell": {
+                            "collection_index": 222
+                          }
+                        },
+                        {
+                          "c223@server_form.adv_map_cell": {
+                            "collection_index": 223
+                          }
+                        },
+                        {
+                          "c224@server_form.adv_map_cell": {
+                            "collection_index": 224
+                          }
+                        },
+                        {
+                          "c225@server_form.adv_map_cell": {
+                            "collection_index": 225
+                          }
+                        },
+                        {
+                          "c226@server_form.adv_map_cell": {
+                            "collection_index": 226
+                          }
+                        },
+                        {
+                          "c227@server_form.adv_map_cell": {
+                            "collection_index": 227
+                          }
+                        },
+                        {
+                          "c228@server_form.adv_map_cell": {
+                            "collection_index": 228
+                          }
+                        },
+                        {
+                          "c229@server_form.adv_map_cell": {
+                            "collection_index": 229
+                          }
+                        },
+                        {
+                          "c230@server_form.adv_map_cell": {
+                            "collection_index": 230
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "row11": {
+                      "type": "stack_panel",
+                      "orientation": "horizontal",
+                      "size": [
+                        210,
+                        10
+                      ],
+                      "collection_name": "form_buttons",
+                      "controls": [
+                        {
+                          "c231@server_form.adv_map_cell": {
+                            "collection_index": 231
+                          }
+                        },
+                        {
+                          "c232@server_form.adv_map_cell": {
+                            "collection_index": 232
+                          }
+                        },
+                        {
+                          "c233@server_form.adv_map_cell": {
+                            "collection_index": 233
+                          }
+                        },
+                        {
+                          "c234@server_form.adv_map_cell": {
+                            "collection_index": 234
+                          }
+                        },
+                        {
+                          "c235@server_form.adv_map_cell": {
+                            "collection_index": 235
+                          }
+                        },
+                        {
+                          "c236@server_form.adv_map_cell": {
+                            "collection_index": 236
+                          }
+                        },
+                        {
+                          "c237@server_form.adv_map_cell": {
+                            "collection_index": 237
+                          }
+                        },
+                        {
+                          "c238@server_form.adv_map_cell": {
+                            "collection_index": 238
+                          }
+                        },
+                        {
+                          "c239@server_form.adv_map_cell": {
+                            "collection_index": 239
+                          }
+                        },
+                        {
+                          "c240@server_form.adv_map_cell": {
+                            "collection_index": 240
+                          }
+                        },
+                        {
+                          "c241@server_form.adv_map_cell": {
+                            "collection_index": 241
+                          }
+                        },
+                        {
+                          "c242@server_form.adv_map_cell": {
+                            "collection_index": 242
+                          }
+                        },
+                        {
+                          "c243@server_form.adv_map_cell": {
+                            "collection_index": 243
+                          }
+                        },
+                        {
+                          "c244@server_form.adv_map_cell": {
+                            "collection_index": 244
+                          }
+                        },
+                        {
+                          "c245@server_form.adv_map_cell": {
+                            "collection_index": 245
+                          }
+                        },
+                        {
+                          "c246@server_form.adv_map_cell": {
+                            "collection_index": 246
+                          }
+                        },
+                        {
+                          "c247@server_form.adv_map_cell": {
+                            "collection_index": 247
+                          }
+                        },
+                        {
+                          "c248@server_form.adv_map_cell": {
+                            "collection_index": 248
+                          }
+                        },
+                        {
+                          "c249@server_form.adv_map_cell": {
+                            "collection_index": 249
+                          }
+                        },
+                        {
+                          "c250@server_form.adv_map_cell": {
+                            "collection_index": 250
+                          }
+                        },
+                        {
+                          "c251@server_form.adv_map_cell": {
+                            "collection_index": 251
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "row12": {
+                      "type": "stack_panel",
+                      "orientation": "horizontal",
+                      "size": [
+                        210,
+                        10
+                      ],
+                      "collection_name": "form_buttons",
+                      "controls": [
+                        {
+                          "c252@server_form.adv_map_cell": {
+                            "collection_index": 252
+                          }
+                        },
+                        {
+                          "c253@server_form.adv_map_cell": {
+                            "collection_index": 253
+                          }
+                        },
+                        {
+                          "c254@server_form.adv_map_cell": {
+                            "collection_index": 254
+                          }
+                        },
+                        {
+                          "c255@server_form.adv_map_cell": {
+                            "collection_index": 255
+                          }
+                        },
+                        {
+                          "c256@server_form.adv_map_cell": {
+                            "collection_index": 256
+                          }
+                        },
+                        {
+                          "c257@server_form.adv_map_cell": {
+                            "collection_index": 257
+                          }
+                        },
+                        {
+                          "c258@server_form.adv_map_cell": {
+                            "collection_index": 258
+                          }
+                        },
+                        {
+                          "c259@server_form.adv_map_cell": {
+                            "collection_index": 259
+                          }
+                        },
+                        {
+                          "c260@server_form.adv_map_cell": {
+                            "collection_index": 260
+                          }
+                        },
+                        {
+                          "c261@server_form.adv_map_cell": {
+                            "collection_index": 261
+                          }
+                        },
+                        {
+                          "c262@server_form.adv_map_cell": {
+                            "collection_index": 262
+                          }
+                        },
+                        {
+                          "c263@server_form.adv_map_cell": {
+                            "collection_index": 263
+                          }
+                        },
+                        {
+                          "c264@server_form.adv_map_cell": {
+                            "collection_index": 264
+                          }
+                        },
+                        {
+                          "c265@server_form.adv_map_cell": {
+                            "collection_index": 265
+                          }
+                        },
+                        {
+                          "c266@server_form.adv_map_cell": {
+                            "collection_index": 266
+                          }
+                        },
+                        {
+                          "c267@server_form.adv_map_cell": {
+                            "collection_index": 267
+                          }
+                        },
+                        {
+                          "c268@server_form.adv_map_cell": {
+                            "collection_index": 268
+                          }
+                        },
+                        {
+                          "c269@server_form.adv_map_cell": {
+                            "collection_index": 269
+                          }
+                        },
+                        {
+                          "c270@server_form.adv_map_cell": {
+                            "collection_index": 270
+                          }
+                        },
+                        {
+                          "c271@server_form.adv_map_cell": {
+                            "collection_index": 271
+                          }
+                        },
+                        {
+                          "c272@server_form.adv_map_cell": {
+                            "collection_index": 272
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "row13": {
+                      "type": "stack_panel",
+                      "orientation": "horizontal",
+                      "size": [
+                        210,
+                        10
+                      ],
+                      "collection_name": "form_buttons",
+                      "controls": [
+                        {
+                          "c273@server_form.adv_map_cell": {
+                            "collection_index": 273
+                          }
+                        },
+                        {
+                          "c274@server_form.adv_map_cell": {
+                            "collection_index": 274
+                          }
+                        },
+                        {
+                          "c275@server_form.adv_map_cell": {
+                            "collection_index": 275
+                          }
+                        },
+                        {
+                          "c276@server_form.adv_map_cell": {
+                            "collection_index": 276
+                          }
+                        },
+                        {
+                          "c277@server_form.adv_map_cell": {
+                            "collection_index": 277
+                          }
+                        },
+                        {
+                          "c278@server_form.adv_map_cell": {
+                            "collection_index": 278
+                          }
+                        },
+                        {
+                          "c279@server_form.adv_map_cell": {
+                            "collection_index": 279
+                          }
+                        },
+                        {
+                          "c280@server_form.adv_map_cell": {
+                            "collection_index": 280
+                          }
+                        },
+                        {
+                          "c281@server_form.adv_map_cell": {
+                            "collection_index": 281
+                          }
+                        },
+                        {
+                          "c282@server_form.adv_map_cell": {
+                            "collection_index": 282
+                          }
+                        },
+                        {
+                          "c283@server_form.adv_map_cell": {
+                            "collection_index": 283
+                          }
+                        },
+                        {
+                          "c284@server_form.adv_map_cell": {
+                            "collection_index": 284
+                          }
+                        },
+                        {
+                          "c285@server_form.adv_map_cell": {
+                            "collection_index": 285
+                          }
+                        },
+                        {
+                          "c286@server_form.adv_map_cell": {
+                            "collection_index": 286
+                          }
+                        },
+                        {
+                          "c287@server_form.adv_map_cell": {
+                            "collection_index": 287
+                          }
+                        },
+                        {
+                          "c288@server_form.adv_map_cell": {
+                            "collection_index": 288
+                          }
+                        },
+                        {
+                          "c289@server_form.adv_map_cell": {
+                            "collection_index": 289
+                          }
+                        },
+                        {
+                          "c290@server_form.adv_map_cell": {
+                            "collection_index": 290
+                          }
+                        },
+                        {
+                          "c291@server_form.adv_map_cell": {
+                            "collection_index": 291
+                          }
+                        },
+                        {
+                          "c292@server_form.adv_map_cell": {
+                            "collection_index": 292
+                          }
+                        },
+                        {
+                          "c293@server_form.adv_map_cell": {
+                            "collection_index": 293
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "row14": {
+                      "type": "stack_panel",
+                      "orientation": "horizontal",
+                      "size": [
+                        210,
+                        10
+                      ],
+                      "collection_name": "form_buttons",
+                      "controls": [
+                        {
+                          "c294@server_form.adv_map_cell": {
+                            "collection_index": 294
+                          }
+                        },
+                        {
+                          "c295@server_form.adv_map_cell": {
+                            "collection_index": 295
+                          }
+                        },
+                        {
+                          "c296@server_form.adv_map_cell": {
+                            "collection_index": 296
+                          }
+                        },
+                        {
+                          "c297@server_form.adv_map_cell": {
+                            "collection_index": 297
+                          }
+                        },
+                        {
+                          "c298@server_form.adv_map_cell": {
+                            "collection_index": 298
+                          }
+                        },
+                        {
+                          "c299@server_form.adv_map_cell": {
+                            "collection_index": 299
+                          }
+                        },
+                        {
+                          "c300@server_form.adv_map_cell": {
+                            "collection_index": 300
+                          }
+                        },
+                        {
+                          "c301@server_form.adv_map_cell": {
+                            "collection_index": 301
+                          }
+                        },
+                        {
+                          "c302@server_form.adv_map_cell": {
+                            "collection_index": 302
+                          }
+                        },
+                        {
+                          "c303@server_form.adv_map_cell": {
+                            "collection_index": 303
+                          }
+                        },
+                        {
+                          "c304@server_form.adv_map_cell": {
+                            "collection_index": 304
+                          }
+                        },
+                        {
+                          "c305@server_form.adv_map_cell": {
+                            "collection_index": 305
+                          }
+                        },
+                        {
+                          "c306@server_form.adv_map_cell": {
+                            "collection_index": 306
+                          }
+                        },
+                        {
+                          "c307@server_form.adv_map_cell": {
+                            "collection_index": 307
+                          }
+                        },
+                        {
+                          "c308@server_form.adv_map_cell": {
+                            "collection_index": 308
+                          }
+                        },
+                        {
+                          "c309@server_form.adv_map_cell": {
+                            "collection_index": 309
+                          }
+                        },
+                        {
+                          "c310@server_form.adv_map_cell": {
+                            "collection_index": 310
+                          }
+                        },
+                        {
+                          "c311@server_form.adv_map_cell": {
+                            "collection_index": 311
+                          }
+                        },
+                        {
+                          "c312@server_form.adv_map_cell": {
+                            "collection_index": 312
+                          }
+                        },
+                        {
+                          "c313@server_form.adv_map_cell": {
+                            "collection_index": 313
+                          }
+                        },
+                        {
+                          "c314@server_form.adv_map_cell": {
+                            "collection_index": 314
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
               }
             }
           ]
@@ -131,31 +1996,91 @@
         "adv_actions": {
           "type": "stack_panel",
           "orientation": "vertical",
-          "size": [ 105, 147 ],
+          "size": [
+            104,
+            162
+          ],
           "anchor_from": "bottom_right",
           "anchor_to": "bottom_right",
-          "offset": [ -8, -8 ],
+          "offset": [
+            -8,
+            -8
+          ],
           "collection_name": "form_buttons",
           "layer": 3,
           "controls": [
-            { "b0@server_form.adv_action_button": { "collection_index": 315 } },
-            { "pad0": { "type": "panel", "size": [ "100%", 5 ] } },
-            { "b1@server_form.adv_action_button": { "collection_index": 316 } },
-            { "pad1": { "type": "panel", "size": [ "100%", 5 ] } },
-            { "b2@server_form.adv_action_button": { "collection_index": 317 } },
-            { "pad2": { "type": "panel", "size": [ "100%", 5 ] } },
-            { "b3@server_form.adv_action_button": { "collection_index": 318 } },
-            { "pad3": { "type": "panel", "size": [ "100%", 5 ] } },
-            { "b4@server_form.adv_action_button": { "collection_index": 319 } }
+            {
+              "b0@server_form.adv_action_button": {
+                "collection_index": 315
+              }
+            },
+            {
+              "pad0": {
+                "type": "panel",
+                "size": [
+                  "100%",
+                  5.5
+                ]
+              }
+            },
+            {
+              "b1@server_form.adv_action_button": {
+                "collection_index": 316
+              }
+            },
+            {
+              "pad1": {
+                "type": "panel",
+                "size": [
+                  "100%",
+                  5.5
+                ]
+              }
+            },
+            {
+              "b2@server_form.adv_action_button": {
+                "collection_index": 317
+              }
+            },
+            {
+              "pad2": {
+                "type": "panel",
+                "size": [
+                  "100%",
+                  5.5
+                ]
+              }
+            },
+            {
+              "b3@server_form.adv_action_button": {
+                "collection_index": 318
+              }
+            },
+            {
+              "pad3": {
+                "type": "panel",
+                "size": [
+                  "100%",
+                  5.5
+                ]
+              }
+            },
+            {
+              "b4@server_form.adv_action_button": {
+                "collection_index": 319
+              }
+            }
           ]
         }
       }
     ]
   },
-
   "adv_map_cell": {
     "type": "image",
-    "size": [ 9, 9 ],
+    "size": [
+      10,
+      10
+    ],
     "bindings": [
       {
         "binding_type": "collection",
@@ -171,32 +2096,81 @@
       }
     ]
   },
-
   "adv_action_button": {
     "type": "button",
-    "size": [ "100%", 25 ],
+    "size": [
+      "100%",
+      28
+    ],
     "default_control": "default",
     "hover_control": "hover",
     "pressed_control": "pressed",
     "$pressed_button_name": "button.form_button_click",
     "button_mappings": [
-      { "from_button_id": "button.menu_select", "to_button_id": "$pressed_button_name", "mapping_type": "pressed" },
-      { "from_button_id": "button.menu_ok", "to_button_id": "$pressed_button_name", "mapping_type": "focused" }
+      {
+        "from_button_id": "button.menu_select",
+        "to_button_id": "$pressed_button_name",
+        "mapping_type": "pressed"
+      },
+      {
+        "from_button_id": "button.menu_ok",
+        "to_button_id": "$pressed_button_name",
+        "mapping_type": "focused"
+      }
     ],
     "bindings": [
-      { "binding_type": "collection_details", "binding_collection_name": "form_buttons" }
+      {
+        "binding_type": "collection_details",
+        "binding_collection_name": "form_buttons"
+      }
     ],
     "controls": [
-      { "default": { "type": "image", "texture": "textures/ui/adv/btn", "size": [ "100%", "100%" ], "layer": 1 } },
-      { "hover": { "type": "image", "texture": "textures/ui/adv/btn_hover", "size": [ "100%", "100%" ], "layer": 1 } },
-      { "pressed": { "type": "image", "texture": "textures/ui/adv/btn_pressed", "size": [ "100%", "100%" ], "layer": 1 } },
+      {
+        "default": {
+          "type": "image",
+          "texture": "textures/ui/adv/btn",
+          "size": [
+            "100%",
+            "100%"
+          ],
+          "layer": 1
+        }
+      },
+      {
+        "hover": {
+          "type": "image",
+          "texture": "textures/ui/adv/btn_hover",
+          "size": [
+            "100%",
+            "100%"
+          ],
+          "layer": 1
+        }
+      },
+      {
+        "pressed": {
+          "type": "image",
+          "texture": "textures/ui/adv/btn_pressed",
+          "size": [
+            "100%",
+            "100%"
+          ],
+          "layer": 1
+        }
+      },
       {
         "icon": {
           "type": "image",
-          "size": [ 16, 16 ],
+          "size": [
+            16,
+            16
+          ],
           "anchor_from": "left_middle",
           "anchor_to": "left_middle",
-          "offset": [ 5, 0 ],
+          "offset": [
+            5,
+            0
+          ],
           "layer": 3,
           "bindings": [
             {
@@ -218,11 +2192,18 @@
         "text": {
           "type": "label",
           "text": "#form_button_text",
-          "color": [ 1, 1, 1 ],
+          "color": [
+            1,
+            1,
+            1
+          ],
           "shadow": true,
           "anchor_from": "left_middle",
           "anchor_to": "left_middle",
-          "offset": [ 25, 0 ],
+          "offset": [
+            25,
+            0
+          ],
           "layer": 3,
           "bindings": [
             {
