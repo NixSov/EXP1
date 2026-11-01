@@ -82,19 +82,43 @@ function isOpen(block) {
   }
 }
 
-function surfaceCell(dim, x, z, py) {
-  let b;
-  try {
-    b = dim.getTopmostBlock({ x, z });
-  } catch {
-    b = undefined;
+// Поиск верхнего блока дорогой, поэтому результаты держим 10 секунд.
+const topCache = new Map(); // "dim|x|z" -> { y, cat, tick }
+const TOP_TTL = 200;
+
+function chunkLoaded(dim, x, z, py, chunkCache) {
+  const key = (x >> 4) + "," + (z >> 4);
+  let ok = chunkCache.get(key);
+  if (ok === undefined) {
+    ok = !!getBlock(dim, { x, y: py, z });
+    chunkCache.set(key, ok);
   }
-  if (!b) return TERRAIN.unknown[1];
-  const dy = b.location.y - py;
-  return TERRAIN[category(b.typeId)][dy > 4 ? 2 : dy < -4 ? 0 : 1];
+  return ok;
 }
 
-function caveCell(dim, x, z, py) {
+function surfaceCell(dim, x, z, py, chunkCache) {
+  const key = dim.id + "|" + x + "|" + z;
+  const now = system.currentTick;
+  let t = topCache.get(key);
+  if (!t || now - t.tick > TOP_TTL || now < t.tick) {
+    if (!chunkLoaded(dim, x, z, py, chunkCache)) return TERRAIN.unknown[1];
+    let b;
+    try {
+      b = dim.getTopmostBlock({ x, z });
+    } catch {
+      b = undefined;
+    }
+    if (!b) return TERRAIN.unknown[1];
+    t = { y: b.location.y, cat: category(b.typeId), tick: now };
+    topCache.set(key, t);
+    if (topCache.size > 20000) topCache.clear();
+  }
+  const dy = t.y - py;
+  return TERRAIN[t.cat][dy > 4 ? 2 : dy < -4 ? 0 : 1];
+}
+
+function caveCell(dim, x, z, py, chunkCache) {
+  if (!chunkLoaded(dim, x, z, py, chunkCache)) return TERRAIN.unknown[1];
   const feet = getBlock(dim, { x, y: py, z });
   if (!feet) return TERRAIN.unknown[1];
   try {
@@ -131,7 +155,8 @@ const COMPASS = ["С", "СВ", "В", "ЮВ", "Ю", "ЮЗ", "З", "СЗ"];
 
 // ---------------------------------------------------------------- отрисовка
 
-function renderMap(p, cfg) {
+/** Отрисовка по строке за тик — чтобы игра не прерывала долгий скрипт. */
+function* renderMap(p, cfg, out) {
   const dim = p.dimension;
   const size = SIZES[cfg.size] ?? SIZES[1];
   const scale = ZOOMS[cfg.zoom] ?? 1;
@@ -140,15 +165,18 @@ function renderMap(p, cfg) {
   const hh = Math.floor(size.h / 2);
   const cave = useCaveMode(p, cfg);
 
+  const chunkCache = new Map();
   const grid = [];
   for (let r = 0; r < size.h; r++) {
     const row = [];
     for (let col = 0; col < size.w; col++) {
       const x = c.x + (col - hw) * scale;
       const z = c.z + (r - hh) * scale;
-      row.push(cave ? caveCell(dim, x, z, c.y) : surfaceCell(dim, x, z, c.y));
+      row.push(cave ? caveCell(dim, x, z, c.y, chunkCache) : surfaceCell(dim, x, z, c.y, chunkCache));
     }
     grid.push(row);
+    yield;
+    if (!isValid(p)) return;
   }
 
   const put = (loc, ch) => {
@@ -185,14 +213,35 @@ function renderMap(p, cfg) {
     }
   }
   grid[hh][hw] = MARKERS[SELF[headingIndex(p)]];
-  return { lines: grid.map((r) => r.join("")), cave, scale, others };
+  Object.assign(out, { lines: grid.map((r) => r.join("")), cave, scale, others });
 }
 
 // ---------------------------------------------------------------- окна
 
+const rendering = new Set();
+
 export function openMap(p) {
+  if (rendering.has(p.id)) return;
+  rendering.add(p.id);
   const cfg = getCfg(p);
-  const m = renderMap(p, cfg);
+  const m = {};
+  system.runJob((function* () {
+    try {
+      yield* renderMap(p, cfg, m);
+      if (isValid(p)) showMap(p, cfg, m);
+    } catch (e) {
+      // карта не должна «ломаться» навсегда: сбрасываем масштаб и сообщаем ошибку
+      cfg.zoom = 0;
+      setCfg(p, cfg);
+      if (isValid(p)) p.sendMessage(`§cОшибка карты (пришли это разработчику): §7${e}`);
+      console.warn("[adventure] map: " + e);
+    } finally {
+      rendering.delete(p.id);
+    }
+  })());
+}
+
+function showMap(p, cfg, m) {
   const c = V.floor(p.location);
   const head = `§7${c.x}, ${c.y}, ${c.z} §8| §7${COMPASS[headingIndex(p)]} §8| §71:${m.scale} §8| §7${m.cave ? "пещеры" : "поверхность"}`;
   const legend = [];
