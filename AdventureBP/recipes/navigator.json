@@ -16,6 +16,11 @@
         "count": 2
       }
     ],
+    "unlock": [
+      {
+        "item": "minecraft:compass"
+      }
+    ],
     "result": {
       "item": "adv:navigator"
     }

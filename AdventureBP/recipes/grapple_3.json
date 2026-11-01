@@ -16,6 +16,11 @@
         "count": 3
       }
     ],
+    "unlock": [
+      {
+        "item": "adv:grapple_2"
+      }
+    ],
     "result": {
       "item": "adv:grapple_3"
     }

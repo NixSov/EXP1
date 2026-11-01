@@ -380,25 +380,37 @@ function wpLine(p, w) {
   return `${dist} · ${w.x}, ${w.y}, ${w.z}`;
 }
 
-function openWaypointList(p) {
+// Прокрутка в окнах форм на телефоне ненадёжна, поэтому список разбит на страницы.
+const PAGE_SIZE = 3;
+
+function openWaypointList(p, page = 0) {
   const list = sortedWaypoints(p);
+  const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  page = Math.max(0, Math.min(page, pages - 1));
+  const shown = list.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
   const form = new ActionFormData().title(MENU_FORM_FLAG + "§lВейпоинты");
-  form.body(list.length ? "§7Нажми на точку, чтобы телепортироваться, переименовать или удалить её." : "§7Пока нет ни одной точки.");
-  for (const w of list) {
+  form.body(list.length
+    ? `§7Страница ${page + 1} из ${pages} · всего точек: ${list.length}`
+    : "§7Пока нет ни одной точки.");
+  for (const w of shown) {
     const color = w.kind === "death" ? "§c" : w.kind === "dungeon" ? "§6" : "§e";
     form.button(`${color}${w.name}§r\n§7${wpLine(p, w)}`, UI + (w.kind === "death" ? "death" : w.kind === "dungeon" ? "dungeon" : "waypoint"));
   }
-  form.button("Назад к карте", UI + "back");
+  const hasNext = page < pages - 1;
+  if (hasNext) form.button("Следующая страница", UI + "next");
+  form.button(page > 0 ? "Предыдущая страница" : "Назад к карте", UI + "back");
   showForm(form, p, (res) => {
-    const w = list[res.selection];
-    if (!w) return openMap(p);
-    openWaypoint(p, w.id);
+    const sel = res.selection;
+    if (sel < shown.length) return openWaypoint(p, shown[sel].id, page);
+    if (hasNext && sel === shown.length) return openWaypointList(p, page + 1);
+    if (page > 0) return openWaypointList(p, page - 1);
+    openMap(p);
   });
 }
 
-function openWaypoint(p, id) {
+function openWaypoint(p, id, page = 0) {
   const w = getWaypoints(p).find((x) => x.id === id);
-  if (!w) return openWaypointList(p);
+  if (!w) return openWaypointList(p, page);
   const form = new ActionFormData()
     .title(MENU_FORM_FLAG + "§l" + w.name)
     .body(`§7${dimName(w.dim)}\n§f${w.x}, ${w.y}, ${w.z}\n§7${wpLine(p, w)}`)
@@ -411,18 +423,18 @@ function openWaypoint(p, id) {
       case 0:
         return teleportTo(p, w);
       case 1:
-        return openRename(p, w);
+        return openRename(p, w, page);
       case 2:
         setWaypoints(p, getWaypoints(p).filter((x) => x.id !== id));
         p.sendMessage(`§7Точка «${w.name}» удалена.`);
-        return openWaypointList(p);
+        return openWaypointList(p, page);
       default:
-        return openWaypointList(p);
+        return openWaypointList(p, page);
     }
   });
 }
 
-function openRename(p, w) {
+function openRename(p, w, page = 0) {
   const form = new ModalFormData()
     .title("Переименовать")
     .textField("Новое название:", "Название", { defaultValue: w.name })
@@ -435,7 +447,7 @@ function openRename(p, w) {
       if (item) item.name = name;
       setWaypoints(p, list);
     }
-    openWaypoint(p, w.id);
+    openWaypoint(p, w.id, page);
   });
 }
 

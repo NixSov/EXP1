@@ -1,0 +1,30 @@
+{
+  "format_version": "1.20.10",
+  "minecraft:recipe_shapeless": {
+    "description": {
+      "identifier": "adv:grapple_1_cobblestone"
+    },
+    "tags": [
+      "crafting_table"
+    ],
+    "ingredients": [
+      {
+        "item": "minecraft:stick"
+      },
+      {
+        "item": "minecraft:string"
+      },
+      {
+        "item": "minecraft:cobblestone"
+      }
+    ],
+    "unlock": [
+      {
+        "item": "minecraft:string"
+      }
+    ],
+    "result": {
+      "item": "adv:grapple_1"
+    }
+  }
+}

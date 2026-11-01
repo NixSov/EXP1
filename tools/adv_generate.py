@@ -54,7 +54,7 @@ GRAPPLE_TIERS = [
     (4, 52, 1.7, 6.5, ("minecraft:diamond", 2)),
     (5, 64, 2.0, 8.0, ("minecraft:netherite_ingot", 1)),
 ]
-TIER_COLORS = [(150, 150, 150), (220, 220, 225), (250, 205, 60), (90, 230, 220), (90, 70, 90)]
+TIER_COLORS = [(150, 150, 150), (220, 220, 225), (250, 205, 60), (90, 230, 220), (130, 108, 136)]
 
 
 def shade(c, k):
@@ -161,27 +161,45 @@ def icon_navigator():
     return outline(img, (60, 45, 30))
 
 
+GRAPPLE_ART = [
+    "................",
+    "..........o.....",
+    ".....o...olo....",
+    "....olo..olo..o.",
+    "....oLo..oLo.olo",
+    "....oMdo.oMo.oLo",
+    ".....oMdooMooMdo",
+    "......odMMMMMdo.",
+    ".......odMLMdo..",
+    "........oRRo....",
+    ".......oRro.....",
+    "......oRro......",
+    "..oo.oRro.......",
+    ".oRRoRro........",
+    ".oRrRro.........",
+    "..oooo..........",
+]
+
+
 def icon_grapple(tier):
-    tip = TIER_COLORS[tier - 1]
+    metal = TIER_COLORS[tier - 1]
+    pal = {
+        "o": (28, 24, 24),
+        "L": shade(metal, 1.3),
+        "M": metal,
+        "d": shade(metal, 0.62),
+        "R": (150, 112, 70),
+        "r": (205, 170, 120),
+    }
     img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    # рукоять
-    d.line((2, 13, 7, 8), fill=(120, 80, 40, 255), width=2)
-    # верёвка
-    for i, (x, y) in enumerate(((1, 10), (2, 8), (1, 6), (2, 4), (3, 2))):
-        img.putpixel((x, y), (230, 220, 200, 255))
-    # крюк
-    d.line((7, 8, 11, 4), fill=tip + (255,), width=2)
-    d.line((11, 4, 14, 3), fill=tip + (255,), width=1)
-    d.line((11, 4, 12, 1), fill=tip + (255,), width=1)
-    d.line((11, 4, 14, 6), fill=tip + (255,), width=1)
-    img.putpixel((14, 2), shade(tip, 1.25) + (255,))
-    img.putpixel((12, 0), shade(tip, 1.25) + (255,))
-    img.putpixel((15, 6), shade(tip, 1.25) + (255,))
-    img = outline(img, (35, 30, 30))
-    # римская цифра уровня точками
+    for y, row in enumerate(GRAPPLE_ART):
+        assert len(row) == 16, row
+        for x, ch in enumerate(row):
+            if ch in pal:
+                img.putpixel((x, y), pal[ch] + (255,))
+    # уровень — точки в правом нижнем углу
     for i in range(tier):
-        img.putpixel((9 + i, 14), (255, 255, 255, 255))
+        img.putpixel((15 - i * 2, 15), (255, 255, 255, 255))
     return img
 
 
@@ -236,6 +254,8 @@ def ui_icon(kind):
     elif kind == "delete":
         d.line((3, 3, 12, 12), fill=(240, 60, 60, 255), width=3)
         d.line((12, 3, 3, 12), fill=(240, 60, 60, 255), width=3)
+    elif kind == "next":
+        d.polygon([(14, 8), (8, 2), (8, 5), (2, 5), (2, 11), (8, 11), (8, 14)], fill=white)
     elif kind == "back":
         d.polygon([(2, 8), (8, 2), (8, 5), (14, 5), (14, 11), (8, 11), (8, 14)], fill=white)
     return img.resize((32, 32), Image.NEAREST)
@@ -375,13 +395,14 @@ def item_json(identifier, icon, category="equipment", extra=None):
     }
 
 
-def shapeless(ident, ingredients, result):
+def shapeless(ident, ingredients, result, unlock):
     return {
         "format_version": "1.20.10",
         "minecraft:recipe_shapeless": {
             "description": {"identifier": ident},
             "tags": ["crafting_table"],
             "ingredients": ingredients,
+            "unlock": [{"item": unlock}],
             "result": {"item": result},
         },
     }
@@ -423,22 +444,23 @@ def main():
         lang.append(f"item.adv:{ident}.name=§fКрюк-кошка {roman[tier - 1]}")
         js_grapple.append({"id": "adv:" + ident, "tier": tier, "range": rng, "speed": speed, "fly": fly})
         if tier == 1:
-            write_json(os.path.join(rec_dir, "grapple_1.json"), shapeless("adv:grapple_1", [
-                {"item": "minecraft:stick"},
-                {"item": "minecraft:string"},
-                {"tag": "minecraft:stone_tool_materials"},
-            ], "adv:grapple_1"))
+            for stone in ("cobblestone", "stone", "cobbled_deepslate", "blackstone"):
+                write_json(os.path.join(rec_dir, f"grapple_1_{stone}.json"), shapeless(f"adv:grapple_1_{stone}", [
+                    {"item": "minecraft:stick"},
+                    {"item": "minecraft:string"},
+                    {"item": "minecraft:" + stone},
+                ], "adv:grapple_1", unlock="minecraft:string"))
         else:
             item, count = mat
             write_json(os.path.join(rec_dir, f"{ident}.json"), shapeless(f"adv:{ident}", [
                 {"item": f"adv:grapple_{tier - 1}"},
                 {"item": item, "count": count},
-            ], "adv:" + ident))
+            ], "adv:" + ident, unlock=f"adv:grapple_{tier - 1}"))
 
     write_json(os.path.join(rec_dir, "navigator.json"), shapeless("adv:navigator", [
         {"item": "minecraft:compass"},
         {"item": "minecraft:paper", "count": 2},
-    ], "adv:navigator"))
+    ], "adv:navigator", unlock="minecraft:compass"))
     write_json(os.path.join(rec_dir, "backpack.json"), {
         "format_version": "1.20.10",
         "minecraft:recipe_shaped": {
@@ -446,13 +468,13 @@ def main():
             "tags": ["crafting_table"],
             "pattern": ["LSL", "LCL", "LLL"],
             "key": {"L": "minecraft:leather", "S": "minecraft:string", "C": "minecraft:chest"},
-            "unlock": [{"item": "minecraft:leather"}],
+            "unlock": [{"item": "minecraft:chest"}],
             "result": {"item": "adv:backpack"},
         },
     })
 
     for kind in ("zoom_in", "zoom_out", "add_wp", "list", "settings", "waypoint", "death", "dungeon",
-                 "teleport", "rename", "delete", "back"):
+                 "teleport", "rename", "delete", "back", "next"):
         ui_icon(kind).save(os.path.join(UI_TEX, kind + ".png"))
 
     write_json(os.path.join(RP, "textures", "item_texture.json"), {

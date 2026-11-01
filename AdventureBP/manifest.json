@@ -4,22 +4,22 @@
     "name": "§aПриключения §7(поведение)",
     "description": "Навигатор с картой и вейпоинтами, крюк-кошка, рюкзак и три вида данжей. Для телефона.",
     "uuid": "fee9acad-1779-4f45-ab62-25db4b255ee6",
-    "version": [1, 0, 4],
+    "version": [1, 0, 5],
     "min_engine_version": [1, 21, 90]
   },
   "modules": [
-    { "type": "data", "uuid": "cbf62bd1-ce50-4f65-92af-f7ee47ccf3cc", "version": [1, 0, 4] },
+    { "type": "data", "uuid": "cbf62bd1-ce50-4f65-92af-f7ee47ccf3cc", "version": [1, 0, 5] },
     {
       "type": "script",
       "language": "javascript",
       "uuid": "2265a2c5-e248-4a62-89b3-2a594e53ba30",
-      "version": [1, 0, 4],
+      "version": [1, 0, 5],
       "entry": "scripts/main.js"
     }
   ],
   "dependencies": [
     { "module_name": "@minecraft/server", "version": "2.0.0" },
     { "module_name": "@minecraft/server-ui", "version": "2.0.0" },
-    { "uuid": "f0da9ab4-c3bc-431a-9285-b5c3f5e7f14a", "version": [1, 0, 4] }
+    { "uuid": "f0da9ab4-c3bc-431a-9285-b5c3f5e7f14a", "version": [1, 0, 5] }
   ]
 }

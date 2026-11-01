@@ -107,6 +107,8 @@ export function packBackpack(id, p) {
         includeEntities: false,
         saveMode: StructureSaveMode.World,
       });
+      // сначала опустошаем бочку: иначе при удалении вещи выпадают на землю (дублирование)
+      block.getComponent("minecraft:inventory")?.container?.clearAll();
       block.setType("minecraft:air");
     } catch (e) {
       console.warn("[adventure] backpack pack: " + e);
