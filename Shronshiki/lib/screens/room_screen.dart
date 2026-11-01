@@ -74,16 +74,6 @@ class _RoomScreenState extends State<RoomScreen> {
           ],
         ),
         actions: [
-          if (_call.status == CallStatus.inRoom)
-            IconButton(
-              tooltip: 'Чат комнаты',
-              onPressed: () => showRoomChat(context, _call),
-              icon: Badge(
-                isLabelVisible: _call.unreadChat > 0,
-                label: Text('${_call.unreadChat}'),
-                child: const Icon(Icons.chat_bubble_outline),
-              ),
-            ),
           IconButton(
             tooltip: 'Пригласить',
             icon: const Icon(Icons.person_add_alt_1_outlined),
@@ -341,6 +331,13 @@ class _RoomScreenState extends State<RoomScreen> {
                 onPressed: _call.canSwitchSpeaker ? _call.toggleSpeaker : _pickOutput,
                 onMore: _pickOutput,
               ),
+              _ControlButton(
+                icon: Icons.chat_bubble_outline,
+                label: 'Чат',
+                active: false,
+                badge: _call.unreadChat,
+                onPressed: () => showRoomChat(context, _call),
+              ),
               if (CallController.canShareScreen)
                 _ControlButton(
                   icon: _call.sharingScreen ? Icons.stop_screen_share : Icons.screen_share,
@@ -497,6 +494,7 @@ class _ControlButton extends StatelessWidget {
     this.onMore,
     this.color,
     this.foreground,
+    this.badge = 0,
   });
 
   final IconData icon;
@@ -508,6 +506,9 @@ class _ControlButton extends StatelessWidget {
   final VoidCallback? onMore;
   final Color? color;
   final Color? foreground;
+
+  /// Число на кнопке (например, непрочитанные сообщения); 0 — не показывать.
+  final int badge;
 
   @override
   Widget build(BuildContext context) {
@@ -528,7 +529,11 @@ class _ControlButton extends StatelessWidget {
                 onTap: onPressed,
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(16, 16, onMore == null ? 16 : 8, 16),
-                  child: Icon(icon, size: 28, color: fg),
+                  child: Badge(
+                    isLabelVisible: badge > 0,
+                    label: Text('$badge'),
+                    child: Icon(icon, size: 28, color: fg),
+                  ),
                 ),
               ),
               if (onMore != null)
