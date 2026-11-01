@@ -2411,7 +2411,7 @@
           "type": "panel",
           "size": [
             "100%",
-            6
+            3
           ]
         }
       },
@@ -2442,14 +2442,14 @@
     "type": "panel",
     "size": [
       "100%",
-      36
+      28
     ],
     "controls": [
       {
         "adv_btn@server_form.adv_action_button": {
           "size": [
             "100%",
-            32
+            26
           ],
           "anchor_from": "top_left",
           "anchor_to": "top_left"

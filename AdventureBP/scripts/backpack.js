@@ -3,7 +3,7 @@
 // Вещи лежат в «отсеках» — бочках на 27 слотов, сохранённых как структуры мира
 // (так сохраняется всё: зачарования, книги, шалкеры, карты). Меню рюкзака работает
 // с отсеками незаметно: на один тик ставит бочку, перекладывает вещи и убирает её.
-// «Открыть как сундук» ставит бочку перед игроком, как раньше.
+// Кнопка «Карман N» ставит бочку этого кармана перед игроком (одновременно — одна).
 import { world, system, StructureSaveMode, BlockPermutation } from "@minecraft/server";
 import { ActionFormData } from "@minecraft/server-ui";
 import { V, getBlock, getJson, setJson, sound, actionbar, isValid, mainhand, setMainhand, showForm } from "./util.js";
@@ -147,43 +147,42 @@ export function useBackpack(p) {
     } catch {}
     setMainhand(p, item);
   }
-  // если отсеки открыты как сундук — повторное нажатие их складывает
-  const open = getOpen();
-  const mine = Object.keys(open).filter((key) => (open[key].id ?? key) === id);
-  if (mine.length) {
-    for (const key of mine) packBackpack(key, p);
-    return;
-  }
   openMenu(p, id);
+}
+
+function openPockets(id) {
+  const open = getOpen();
+  return Object.keys(open).filter((key) => (open[key].id ?? key) === id).map((key) => ({ key, k: open[key].k ?? 0 }));
 }
 
 function openMenu(p, id) {
   const found = findBackpack(p, id);
   if (!found) return;
   const n = compartments(found.item);
+  const opened = openPockets(id);
   const form = new ActionFormData()
     .title(MENU_FORM_FLAG + "§lРюкзак")
-    .body(`§7Отсеков: §f${n}§7 из ${MAX_COMPARTMENTS} · §f${n * SLOTS}§7 слотов`)
-    .button("Вещи", UI + "list")
-    .button("Сложить инвентарь\n§7всё, кроме хотбара", UI + "store")
-    .button("Открыть как сундук", UI + "chest");
-  const canUpgrade = n < MAX_COMPARTMENTS;
-  if (canUpgrade) {
-    const cost = UPGRADE_COST[n].map(([, c, name]) => `${c} ${name}`).join(", ");
-    form.button(`Улучшить: +${SLOTS} слотов\n§7${cost}`, UI + "upgrade");
+    .body(`§7Карманов: §f${n}§7 из ${MAX_COMPARTMENTS} · по ${SLOTS} слотов`);
+  const actions = [];
+  for (let k = 0; k < n; k++) {
+    const isOpen = opened.some((o) => o.k === k);
+    form.button(isOpen ? `§aКарман ${k + 1}\n§7открыт — нажми, чтобы сложить` : `Карман ${k + 1}\n§7открыть`, UI + "chest");
+    actions.push(() => (isOpen ? closePockets(p, id) : openAsChest(p, id, k)));
   }
-  showForm(form, p, (res) => {
-    switch (res.selection) {
-      case 0:
-        return openItems(p, id, 0);
-      case 1:
-        return storeInventory(p, id);
-      case 2:
-        return n === 1 ? openAsChest(p, id, 0) : chooseCompartment(p, id, n);
-      case 3:
-        if (canUpgrade) return upgrade(p, id);
-    }
-  });
+  form.button("Вещи\n§7список и быстро забрать", UI + "list");
+  actions.push(() => openItems(p, id, 0));
+  form.button("Сложить инвентарь\n§7всё, кроме хотбара", UI + "store");
+  actions.push(() => storeInventory(p, id));
+  if (n < MAX_COMPARTMENTS) {
+    const cost = UPGRADE_COST[n].map(([, c, name]) => `${c} ${name}`).join(", ");
+    form.button(`Новый карман\n§7${cost}`, UI + "upgrade");
+    actions.push(() => upgrade(p, id));
+  }
+  showForm(form, p, (res) => actions[res.selection]?.());
+}
+
+function closePockets(p, id) {
+  for (const o of openPockets(id)) packBackpack(o.key, p);
 }
 
 // ---------------------------------------------------------------- список вещей
@@ -226,7 +225,7 @@ function openItems(p, id, page) {
       ? `§7Нажми на вещь, чтобы забрать её. Страница ${page + 1} из ${pages} · стаков: ${list.length}/${n * SLOTS}`
       : "§7Рюкзак пуст.");
   for (const e of shown) {
-    form.button(`§f${e.name}${e.ench ? " §d(зачар.)" : ""} §7×${e.amount}\n§8отсек ${e.k + 1}`, UI + "item");
+    form.button(`§f${e.name}${e.ench ? " §d(зачар.)" : ""} §7×${e.amount}\n§8карман ${e.k + 1}`, UI + "item");
   }
   const hasNext = page < pages - 1;
   if (hasNext) form.button("Следующая страница", UI + "next");
@@ -342,27 +341,18 @@ function upgrade(p, id) {
   if (!again) return;
   again.item.setDynamicProperty("adv:bp_n", n + 1);
   try {
-    again.item.setLore([`§7Отсеков: ${n + 1} (${(n + 1) * SLOTS} слотов)`, "§7Нажми, чтобы открыть меню рюкзака"]);
+    again.item.setLore([`§7Карманов: ${n + 1} (${(n + 1) * SLOTS} слотов)`, "§7Нажми, чтобы открыть меню рюкзака"]);
   } catch {}
   again.inv.setItem(again.slot, again.item);
   sound(p.dimension, "random.levelup", p.location, 1.4);
-  actionbar(p, `§aРюкзак улучшен: ${(n + 1) * SLOTS} слотов`);
+  actionbar(p, `§aНовый карман ${n + 1}: всего ${(n + 1) * SLOTS} слотов`);
   openMenu(p, id);
 }
 
 // ---------------------------------------------------------------- открыть как сундук
 
-function chooseCompartment(p, id, n) {
-  const form = new ActionFormData().title(MENU_FORM_FLAG + "§lКакой отсек открыть?").body("§7Каждый отсек — 27 слотов.");
-  for (let k = 0; k < n; k++) form.button(`Отсек ${k + 1}`, UI + "chest");
-  form.button("Назад", UI + "back");
-  showForm(form, p, (res) => {
-    if (res.selection < n) return openAsChest(p, id, res.selection);
-    openMenu(p, id);
-  });
-}
-
 function openAsChest(p, id, k) {
+  closePockets(p, id); // одновременно открыт только один карман
   const loc = findSpot(p);
   if (!loc) {
     actionbar(p, "§cНет места перед тобой, чтобы открыть рюкзак");
@@ -380,7 +370,7 @@ function openAsChest(p, id, k) {
   open[openKey(id, k)] = { id, k, dim: dim.id, x: loc.x, y: loc.y, z: loc.z, owner: p.id, tick: system.currentTick };
   setOpen(open);
   sound(dim, "armor.equip_leather", loc, 1);
-  actionbar(p, "§6Отсек открыт §7— нажми на бочку. Нажми рюкзак ещё раз или отойди, чтобы сложить.");
+  actionbar(p, `§6Карман ${k + 1} открыт §7— нажми на бочку. Отойди или сложи его в меню рюкзака.`);
 }
 
 /** Сложить открытый отсек: сохранить бочку с содержимым и убрать её. */
