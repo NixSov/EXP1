@@ -290,6 +290,8 @@ export function openMap(p) {
 
 // Метка в заголовке: по ней ресурс-пак (ui/server_form.json) рисует окно карты картинками.
 export const MAP_FORM_FLAG = "§a§d§v§r";
+// Метка для обычных меню навигатора в том же оформлении.
+export const MENU_FORM_FLAG = "§a§d§m§r";
 const ACTIONS = [
   ["Приблизить", "zoom_in"],
   ["Отдалить", "zoom_out"],
@@ -380,11 +382,11 @@ function wpLine(p, w) {
 
 function openWaypointList(p) {
   const list = sortedWaypoints(p);
-  const form = new ActionFormData().title("Вейпоинты");
+  const form = new ActionFormData().title(MENU_FORM_FLAG + "§lВейпоинты");
   form.body(list.length ? "§7Нажми на точку, чтобы телепортироваться, переименовать или удалить её." : "§7Пока нет ни одной точки.");
   for (const w of list) {
-    const color = w.kind === "death" ? "§4" : w.kind === "dungeon" ? "§6" : "§1";
-    form.button(`${color}§l${w.name}§r\n§8${wpLine(p, w)}`, UI + (w.kind === "death" ? "death" : w.kind === "dungeon" ? "dungeon" : "waypoint"));
+    const color = w.kind === "death" ? "§c" : w.kind === "dungeon" ? "§6" : "§e";
+    form.button(`${color}${w.name}§r\n§7${wpLine(p, w)}`, UI + (w.kind === "death" ? "death" : w.kind === "dungeon" ? "dungeon" : "waypoint"));
   }
   form.button("Назад к карте", UI + "back");
   showForm(form, p, (res) => {
@@ -398,7 +400,7 @@ function openWaypoint(p, id) {
   const w = getWaypoints(p).find((x) => x.id === id);
   if (!w) return openWaypointList(p);
   const form = new ActionFormData()
-    .title(w.name)
+    .title(MENU_FORM_FLAG + "§l" + w.name)
     .body(`§7${dimName(w.dim)}\n§f${w.x}, ${w.y}, ${w.z}\n§7${wpLine(p, w)}`)
     .button("Телепортироваться", UI + "teleport")
     .button("Переименовать", UI + "rename")

@@ -4,13 +4,13 @@
     "name": "§aПриключения §7(ресурсы)",
     "description": "Текстуры, символы карты и переводы для «Приключений».",
     "uuid": "f0da9ab4-c3bc-431a-9285-b5c3f5e7f14a",
-    "version": [1, 0, 3],
+    "version": [1, 0, 4],
     "min_engine_version": [1, 21, 90]
   },
   "modules": [
-    { "type": "resources", "uuid": "badfb204-d571-4dc0-a19f-bc562aa269b7", "version": [1, 0, 3] }
+    { "type": "resources", "uuid": "badfb204-d571-4dc0-a19f-bc562aa269b7", "version": [1, 0, 4] }
   ],
   "dependencies": [
-    { "uuid": "fee9acad-1779-4f45-ab62-25db4b255ee6", "version": [1, 0, 3] }
+    { "uuid": "fee9acad-1779-4f45-ab62-25db4b255ee6", "version": [1, 0, 4] }
   ]
 }
