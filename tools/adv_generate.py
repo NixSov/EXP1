@@ -254,6 +254,19 @@ def ui_icon(kind):
     elif kind == "delete":
         d.line((3, 3, 12, 12), fill=(240, 60, 60, 255), width=3)
         d.line((12, 3, 3, 12), fill=(240, 60, 60, 255), width=3)
+    elif kind == "store":
+        d.rounded_rectangle((2, 5, 13, 15), radius=2, fill=(150, 92, 48, 255))
+        d.rectangle((2, 5, 13, 8), fill=(120, 70, 36, 255))
+        d.polygon([(8, 0), (12, 4), (4, 4)], fill=(90, 230, 90, 255))
+    elif kind == "chest":
+        d.rectangle((1, 4, 14, 14), fill=(150, 104, 52, 255), outline=(60, 40, 20, 255))
+        d.line((1, 8, 14, 8), fill=(60, 40, 20, 255))
+        d.rectangle((7, 7, 8, 10), fill=(220, 220, 220, 255))
+    elif kind == "upgrade":
+        d.polygon([(8, 1), (14, 8), (10, 8), (10, 14), (6, 14), (6, 8), (2, 8)], fill=(90, 230, 90, 255))
+    elif kind == "item":
+        d.polygon([(8, 1), (14, 8), (8, 15), (2, 8)], fill=(100, 200, 230, 255))
+        d.polygon([(8, 4), (11, 8), (8, 12), (5, 8)], fill=(190, 240, 250, 255))
     elif kind == "next":
         d.polygon([(14, 8), (8, 2), (8, 5), (2, 5), (2, 11), (8, 11), (8, 14)], fill=white)
     elif kind == "back":
@@ -474,7 +487,7 @@ def main():
     })
 
     for kind in ("zoom_in", "zoom_out", "add_wp", "list", "settings", "waypoint", "death", "dungeon",
-                 "teleport", "rename", "delete", "back", "next"):
+                 "teleport", "rename", "delete", "back", "next", "store", "chest", "upgrade", "item"):
         ui_icon(kind).save(os.path.join(UI_TEX, kind + ".png"))
 
     write_json(os.path.join(RP, "textures", "item_texture.json"), {
