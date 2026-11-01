@@ -353,7 +353,7 @@ function openAddWaypoint(p) {
   const n = getWaypoints(p).filter((w) => w.kind === "wp").length + 1;
   const loc = V.floor(p.location);
   const form = new ModalFormData()
-    .title("Новый вейпоинт")
+    .title(MENU_FORM_FLAG + "§lНовый вейпоинт")
     .textField(`Координаты: ${loc.x}, ${loc.y}, ${loc.z}\nНазвание:`, "Название точки", { defaultValue: `Точка ${n}` })
     .submitButton("Сохранить");
   showForm(form, p, (res) => {
@@ -436,7 +436,7 @@ function openWaypoint(p, id, page = 0) {
 
 function openRename(p, w, page = 0) {
   const form = new ModalFormData()
-    .title("Переименовать")
+    .title(MENU_FORM_FLAG + "§lПереименовать")
     .textField("Новое название:", "Название", { defaultValue: w.name })
     .submitButton("Готово");
   showForm(form, p, (res) => {
@@ -471,27 +471,33 @@ function teleportTo(p, w) {
   }, 2);
 }
 
+// Настройки — меню с кнопками-переключателями: нажатие меняет значение.
 function openDisplay(p) {
   const cfg = getCfg(p);
-  const form = new ModalFormData()
-    .title("Отображение")
-    .dropdown("Вид окна", VIEWS, { defaultValueIndex: cfg.view })
-    .dropdown("Вид карты", MODES, { defaultValueIndex: cfg.mode })
-    .dropdown("Размер карты (для простого вида)", SIZES.map((s) => s.name), { defaultValueIndex: cfg.size })
-    .toggle("Показывать игроков", { defaultValue: cfg.players })
-    .toggle("Показывать мобов", { defaultValue: cfg.mobs })
-    .toggle("Показывать вейпоинты и точки смерти", { defaultValue: cfg.wps })
-    .submitButton("Применить");
+  const onOff = (v) => (v ? "§aвкл" : "§cвыкл");
+  const items = [
+    { text: `Вид окна: §e${VIEWS[cfg.view]}`, act: () => { cfg.view = (cfg.view + 1) % VIEWS.length; } },
+    { text: `Вид карты: §e${MODES[cfg.mode]}`, act: () => { cfg.mode = (cfg.mode + 1) % MODES.length; } },
+  ];
+  if (cfg.view === 1) {
+    items.push({ text: `Размер карты: §e${SIZES[cfg.size].name}`, act: () => { cfg.size = (cfg.size + 1) % SIZES.length; } });
+  }
+  items.push(
+    { text: `Игроки: ${onOff(cfg.players)}`, act: () => { cfg.players = !cfg.players; } },
+    { text: `Мобы: ${onOff(cfg.mobs)}`, act: () => { cfg.mobs = !cfg.mobs; } },
+    { text: `Вейпоинты и смерти: ${onOff(cfg.wps)}`, act: () => { cfg.wps = !cfg.wps; } },
+  );
+  const form = new ActionFormData()
+    .title(MENU_FORM_FLAG + "§lОтображение")
+    .body("§7Нажми на настройку, чтобы изменить её.");
+  for (const it of items) form.button(it.text, UI + "settings");
+  form.button("Готово", UI + "back");
   showForm(form, p, (res) => {
-    const v = res.formValues ?? [];
-    cfg.view = Number(v[0] ?? cfg.view);
-    cfg.mode = Number(v[1] ?? cfg.mode);
-    cfg.size = Number(v[2] ?? cfg.size);
-    cfg.players = !!v[3];
-    cfg.mobs = !!v[4];
-    cfg.wps = !!v[5];
+    const it = items[res.selection];
+    if (!it) return openMap(p);
+    it.act();
     setCfg(p, cfg);
-    openMap(p);
+    openDisplay(p);
   });
 }
 

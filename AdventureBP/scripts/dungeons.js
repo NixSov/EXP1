@@ -1,15 +1,18 @@
-// Данжи: три вида подземелий, которые появляются в мире рядом с игроками.
-//   • Крипта Забытых      — каменные залы, скелеты и зомби, стрелы из стен; босс «Хранитель Крипты».
-//   • Ледяной Склеп       — лёд и снег, зимогоры, ловушки с рыхлым снегом; босс «Ледяной Король».
-//   • Пылающая Кузня      — глубоко под землёй, чернокамень и магма, ифриты; босс «Мастер Кузни».
+// Данжи: шесть видов подземелий, которые появляются в мире рядом с игроками.
+//   • Крипта Забытых        — каменные залы, скелеты и зомби, стрелы из стен; босс «Хранитель Крипты».
+//   • Ледяной Склеп         — лёд и снег, зимогоры, ловушки с рыхлым снегом; босс «Ледяной Король».
+//   • Пылающая Кузня        — глубоко под землёй, чернокамень и магма, ифриты; босс «Мастер Кузни».
+//   • Логово Пауков         — паутина и пауки, ловушки-паутины с ядом; босс «Королева Пауков».
+//   • Гробница Фараона      — песчаник, кадавры, проклятие голода; босс «Фараон».
+//   • Затонувшее Святилище  — призмарин, утопленники, проклятие глубин; босс «Владыка Глубин».
 // Каждый данж: 9 залов (3×3), соединённых коридорами, вход-лестница с поверхности,
 // залы с мобами, ловушками и сундуками, зал босса с наградой.
 import { world, system, ItemStack } from "@minecraft/server";
 import { V, getBlock, getJson, setJson, particle, sound, isValid } from "./util.js";
 import { addWaypoint } from "./nav.js";
 
-const CELL = 176; // размер ячейки сетки мира, в каждой может быть один данж
-const CHANCE = 0.5;
+const CELL = 112; // размер ячейки сетки мира, в каждой может быть один данж
+const CHANCE = 0.7;
 const BUILD_DISTANCE = 36;
 const ROOM = 9; // зал с толщиной стен
 const GAP = 4; // длина коридора между залами
@@ -74,6 +77,63 @@ const THEMES = {
     bossLoot: "chests/bastion_treasure",
     trap: "fire",
   },
+  spider: {
+    name: "Логово Пауков",
+    color: "§2",
+    depth: 14,
+    fallback: "minecraft:cobblestone",
+    wall: [["cobblestone", 3], ["mossy_cobblestone", 3], ["stone", 2]],
+    floor: [["dirt", 3], ["coarse_dirt", 2], ["cobblestone", 1]],
+    ceiling: [["mossy_cobblestone", 3], ["cobblestone", 1]],
+    light: "minecraft:verdant_froglight",
+    lightOnFloor: false,
+    decor: [["cobweb", 6], ["bone_block", 1]],
+    surface: "mossy_cobblestone",
+    mobs: [["minecraft:spider", 4], ["minecraft:cave_spider", 3], ["minecraft:skeleton", 1]],
+    elite: "minecraft:spider",
+    boss: { type: "minecraft:spider", name: "§2Королева Пауков", hp: 10, minion: "minecraft:cave_spider" },
+    loot: "chests/abandoned_mineshaft",
+    bossLoot: "chests/simple_dungeon",
+    trap: "webs",
+  },
+  tomb: {
+    name: "Гробница Фараона",
+    color: "§e",
+    depth: 13,
+    fallback: "minecraft:sandstone",
+    wall: [["sandstone", 4], ["cut_sandstone", 3], ["chiseled_sandstone", 1], ["smooth_sandstone", 2]],
+    floor: [["smooth_sandstone", 3], ["sandstone", 2], ["orange_terracotta", 1]],
+    ceiling: [["cut_sandstone", 3], ["sandstone", 1]],
+    light: "minecraft:lantern",
+    lightOnFloor: true,
+    decor: [["orange_terracotta", 2], ["blue_terracotta", 1], ["sand", 1]],
+    surface: "chiseled_sandstone",
+    mobs: [["minecraft:husk", 4], ["minecraft:skeleton", 2]],
+    elite: "minecraft:husk",
+    boss: { type: "minecraft:husk", name: "§eФараон", hp: 10, minion: "minecraft:husk" },
+    loot: "chests/desert_pyramid",
+    bossLoot: "chests/desert_pyramid",
+    trap: "curse",
+  },
+  sunken: {
+    name: "Затонувшее Святилище",
+    color: "§3",
+    depth: 18,
+    fallback: "minecraft:prismarine",
+    wall: [["prismarine", 3], ["prismarine_bricks", 3], ["dark_prismarine", 2]],
+    floor: [["prismarine_bricks", 3], ["dark_prismarine", 1]],
+    ceiling: [["dark_prismarine", 3], ["prismarine", 1]],
+    light: "minecraft:sea_lantern",
+    lightOnFloor: false,
+    decor: [["wet_sponge", 1], ["sea_lantern", 1]],
+    surface: "prismarine_bricks",
+    mobs: [["minecraft:drowned", 5], ["minecraft:zombie", 1]],
+    elite: "minecraft:drowned",
+    boss: { type: "minecraft:drowned", name: "§3Владыка Глубин", hp: 11, minion: "minecraft:drowned" },
+    loot: "chests/underwater_ruin_big",
+    bossLoot: "chests/buried_treasure",
+    trap: "deep",
+  },
 };
 const THEME_KEYS = Object.keys(THEMES);
 
@@ -131,7 +191,8 @@ function pick(list, r) {
 // ---------------------------------------------------------------- состояние
 
 function siteKey(cx, cz) {
-  return `adv:dg:${cx}_${cz}`;
+  // «dg2» — сетка стала мельче, старые записи (adv:dg:) остаются в индексе и продолжают работать
+  return `adv:dg2:${cx}_${cz}`;
 }
 
 function siteFor(cx, cz) {
@@ -172,13 +233,21 @@ function indexSite(key) {
 
 // ---------------------------------------------------------------- строительство
 
+// Если блока нет в этой версии игры — ставим запасной, чтобы в стенах не было дыр.
+let fallbackBlock = "minecraft:stone_bricks";
+
 function* place(dim, loc, type) {
   const b = getBlock(dim, loc);
   if (!b) return;
   try {
     if (typeof type === "string") b.setType(type.includes(":") ? type : "minecraft:" + type);
     else b.setPermutation(type);
-  } catch {}
+  } catch {
+    if (type === "air" || type === "minecraft:air") return;
+    try {
+      b.setType(fallbackBlock);
+    } catch {}
+  }
 }
 
 function layout(r) {
@@ -226,6 +295,7 @@ function roomKinds(r) {
 
 function* buildDungeon(site, dim, surfaceY) {
   const t = THEMES[site.theme];
+  fallbackBlock = t.fallback ?? "minecraft:stone_bricks";
   const r = rng(site.seed);
   const y0 = Math.max(-52, surfaceY - t.depth);
   const ox = site.x - Math.floor(SIZE / 2);
@@ -513,6 +583,41 @@ function trapTick(s, room, dim, players) {
           pl.applyDamage(3);
         } catch {}
       }
+    }
+  } else if (t.trap === "webs") {
+    for (const pl of players) {
+      const loc = V.floor(pl.location);
+      for (let k = 0; k < 2; k++) {
+        const x = loc.x + Math.floor(Math.random() * 3) - 1, z = loc.z + Math.floor(Math.random() * 3) - 1;
+        const b = getBlock(dim, { x, y: loc.y, z });
+        if (b?.isAir) {
+          try {
+            b.setType("minecraft:cobweb");
+          } catch {}
+        }
+      }
+      try {
+        pl.addEffect("poison", 40, { amplifier: 0 });
+      } catch {}
+      sound(dim, "mob.spider.say", pl.location, 0.8);
+    }
+  } else if (t.trap === "curse") {
+    for (const pl of players) {
+      try {
+        pl.addEffect("hunger", 60, { amplifier: 1 });
+        pl.addEffect("weakness", 60, { amplifier: 0 });
+      } catch {}
+      particle(dim, "minecraft:falling_dust_sand_particle", V.add(pl.location, { x: 0, y: 2.5, z: 0 }));
+      sound(dim, "mob.husk.ambient", pl.location, 0.7);
+    }
+  } else if (t.trap === "deep") {
+    for (const pl of players) {
+      try {
+        pl.addEffect("mining_fatigue", 60, { amplifier: 1 });
+        pl.addEffect("slowness", 40, { amplifier: 0 });
+      } catch {}
+      particle(dim, "minecraft:water_splash_particle", V.add(pl.location, { x: 0, y: 2, z: 0 }));
+      sound(dim, "mob.elderguardian.curse", pl.location, 1.4, 0.4);
     }
   } else if (t.trap === "powder_snow") {
     for (const pl of players) {
