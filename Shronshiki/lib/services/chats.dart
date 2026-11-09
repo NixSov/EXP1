@@ -48,6 +48,7 @@ class PersistentMessage {
     required this.name,
     required this.body,
     required this.at,
+    this.attachment,
   });
 
   final int id;
@@ -55,8 +56,10 @@ class PersistentMessage {
   final String name;
   final String body;
   final DateTime at;
+  final Map<String, dynamic>? attachment;
 
   factory PersistentMessage.fromMap(Map<String, dynamic> m) => PersistentMessage(
+        attachment: m['attachment'] == null ? null : Map<String, dynamic>.from(m['attachment'] as Map),
         id: (m['id'] as num).toInt(),
         userId: m['user_id'] as String?,
         name: m['name'] as String? ?? 'Участник',

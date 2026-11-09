@@ -11,6 +11,7 @@ class ChatMessage {
     required this.name,
     required this.body,
     required this.at,
+    this.attachment,
   });
 
   final int id;
@@ -18,8 +19,10 @@ class ChatMessage {
   final String name;
   final String body;
   final DateTime at;
+  final Map<String, dynamic>? attachment;
 
   factory ChatMessage.fromMap(Map<String, dynamic> m) => ChatMessage(
+        attachment: m['attachment'] == null ? null : Map<String, dynamic>.from(m['attachment'] as Map),
         id: (m['id'] as num).toInt(),
         peerId: m['peer_id'] as String? ?? '',
         name: m['name'] as String? ?? 'Участник',
@@ -162,7 +165,7 @@ class RoomSignaling {
         'p_from': peerId,
         'p_messages': batch,
       }).timeout(_timeout);
-      _outbox.removeRange(0, batch.length);
+      if (!_closed) _outbox.removeRange(0, batch.length);
     } catch (e) {
       debugPrint('signal send failed, will retry: $e');
       if (!_closed) _flushTimer ??= Timer(const Duration(seconds: 1), flush);

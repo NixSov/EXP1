@@ -1,3 +1,5 @@
+import 'file_attachment.dart';
+
 import 'package:flutter/material.dart';
 
 import 'linked_text.dart';
@@ -12,8 +14,14 @@ class ChatBubble extends StatelessWidget {
     required this.mine,
     required this.showName,
     this.highlight = false,
+    this.attachment,
+    this.messageId,
+    this.roomFile = false,
   });
 
+  final Map<String, dynamic>? attachment;
+  final int? messageId;
+  final bool roomFile;
   final String name;
   final String body;
   final DateTime at;
@@ -29,7 +37,8 @@ class ChatBubble extends StatelessWidget {
     final clock = TimeOfDay.fromDateTime(at).format(context);
     // В постоянном чате сообщения бывают за разные дни — тогда с датой.
     final now = DateTime.now();
-    final today = at.year == now.year && at.month == now.month && at.day == now.day;
+    final today =
+        at.year == now.year && at.month == now.month && at.day == now.day;
     String two(int n) => n.toString().padLeft(2, '0');
     final time = today ? clock : '${two(at.day)}.${two(at.month)} $clock';
     return Padding(
@@ -37,12 +46,16 @@ class ChatBubble extends StatelessWidget {
       child: Align(
         alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.75),
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.sizeOf(context).width * 0.75,
+          ),
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: mine ? scheme.primary : scheme.surfaceContainerHighest,
               borderRadius: BorderRadius.circular(14),
-              border: highlight ? Border.all(color: scheme.primary, width: 2) : null,
+              border: highlight
+                  ? Border.all(color: scheme.primary, width: 2)
+                  : null,
             ),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 12, 6),
@@ -51,14 +64,24 @@ class ChatBubble extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (showName && !mine)
-                    Text(name,
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                              color: scheme.primary,
-                              fontWeight: FontWeight.w600,
-                            )),
+                    Text(
+                      name,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        color: scheme.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  if (attachment != null && messageId != null)
+                    FileAttachment(
+                      metadata: attachment!,
+                      message: messageId!,
+                      room: roomFile,
+                    ),
                   LinkedText(
                     body,
-                    style: TextStyle(color: mine ? scheme.onPrimary : scheme.onSurface),
+                    style: TextStyle(
+                      color: mine ? scheme.onPrimary : scheme.onSurface,
+                    ),
                     // На своём (цветном) пузыре ссылка — цветом текста, на чужом — цветом темы.
                     linkColor: mine ? scheme.onPrimary : scheme.primary,
                   ),
@@ -66,8 +89,9 @@ class ChatBubble extends StatelessWidget {
                   Text(
                     time,
                     style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: (mine ? scheme.onPrimary : scheme.onSurface).withValues(alpha: 0.7),
-                        ),
+                      color: (mine ? scheme.onPrimary : scheme.onSurface)
+                          .withValues(alpha: 0.7),
+                    ),
                   ),
                 ],
               ),

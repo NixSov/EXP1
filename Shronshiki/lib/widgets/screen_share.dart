@@ -10,10 +10,8 @@ import '../services/call_controller.dart';
 
 /// Окно выбора: какой экран или окно показывать и в каком качестве.
 /// В браузере экран выбирают в окне самого браузера — здесь только качество.
-Future<({DesktopCapturerSource? source, ScreenQuality quality})?> pickScreenSource(
-  BuildContext context,
-  CallController call,
-) {
+Future<({DesktopCapturerSource? source, ScreenQuality quality, bool audio})?>
+pickScreenSource(BuildContext context, CallController call) {
   return showDialog(
     context: context,
     builder: (context) => _SourcePicker(call: call),
@@ -34,6 +32,7 @@ class _SourcePickerState extends State<_SourcePicker> {
   String? _error;
   DesktopCapturerSource? _selected;
   ScreenQuality _quality = ScreenQuality.economy;
+  bool _audio = false;
   final List<StreamSubscription<Object>> _subscriptions = [];
 
   @override
@@ -48,19 +47,25 @@ class _SourcePickerState extends State<_SourcePicker> {
       if (!mounted) return;
       // Миниатюры приходят не сразу — обновляем картинки по мере готовности.
       for (final s in sources) {
-        _subscriptions.add(s.onThumbnailChanged.stream.listen((_) {
-          if (mounted) setState(() {});
-        }));
+        _subscriptions.add(
+          s.onThumbnailChanged.stream.listen((_) {
+            if (mounted) setState(() {});
+          }),
+        );
       }
       setState(() {
         _sources = [
           ...sources.where((s) => s.type == SourceType.Screen),
-          ...sources.where((s) => s.type == SourceType.Window && s.name.trim().isNotEmpty),
+          ...sources.where(
+            (s) => s.type == SourceType.Window && s.name.trim().isNotEmpty,
+          ),
         ];
         _selected = _sources!.firstOrNull;
       });
     } catch (e) {
-      if (mounted) setState(() => _error = 'Не удалось получить список экранов: $e');
+      if (mounted) {
+        setState(() => _error = 'Не удалось получить список экранов: $e');
+      }
     }
   }
 
@@ -76,7 +81,8 @@ class _SourcePickerState extends State<_SourcePicker> {
   Widget build(BuildContext context) {
     final sources = _sources;
     final turn = widget.call.turnPeers;
-    final screens = sources?.where((s) => s.type == SourceType.Screen).length ?? 0;
+    final screens =
+        sources?.where((s) => s.type == SourceType.Screen).length ?? 0;
     return AlertDialog(
       title: const Text('Показать экран'),
       content: SizedBox(
@@ -86,36 +92,40 @@ class _SourcePickerState extends State<_SourcePicker> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (kIsWeb)
-              const Text('Экран, окно или вкладку выберете в следующем окне браузера.')
+              const Text(
+                'Экран, окно или вкладку выберете в следующем окне браузера.',
+              )
             else
               Flexible(
                 child: _error != null
                     ? Text(_error!)
                     : sources == null
-                        ? const Center(
-                            child: Padding(
-                              padding: EdgeInsets.all(24),
-                              child: CircularProgressIndicator(),
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: CircularProgressIndicator(),
+                        ),
+                      )
+                    : GridView.count(
+                        shrinkWrap: true,
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 8,
+                        crossAxisSpacing: 8,
+                        childAspectRatio: 1.35,
+                        children: [
+                          for (final (i, s) in sources.indexed)
+                            _SourceTile(
+                              source: s,
+                              title: s.type == SourceType.Screen
+                                  ? (screens > 1
+                                        ? 'Весь экран ${i + 1}'
+                                        : 'Весь экран')
+                                  : s.name,
+                              selected: s == _selected,
+                              onTap: () => setState(() => _selected = s),
                             ),
-                          )
-                        : GridView.count(
-                            shrinkWrap: true,
-                            crossAxisCount: 2,
-                            mainAxisSpacing: 8,
-                            crossAxisSpacing: 8,
-                            childAspectRatio: 1.35,
-                            children: [
-                              for (final (i, s) in sources.indexed)
-                                _SourceTile(
-                                  source: s,
-                                  title: s.type == SourceType.Screen
-                                      ? (screens > 1 ? 'Весь экран ${i + 1}' : 'Весь экран')
-                                      : s.name,
-                                  selected: s == _selected,
-                                  onTap: () => setState(() => _selected = s),
-                                ),
-                            ],
-                          ),
+                        ],
+                      ),
               ),
             const SizedBox(height: 16),
             SegmentedButton<ScreenQuality>(
@@ -137,17 +147,32 @@ class _SourcePickerState extends State<_SourcePicker> {
               ),
             ],
             const SizedBox(height: 6),
-            Text('Звук компьютера не передаётся — только картинка.',
-                style: Theme.of(context).textTheme.bodySmall),
+            SwitchListTile(
+              title: const Text('Передавать звук'),
+              subtitle: Text(
+                kIsWeb
+                    ? 'Звук другой вкладки, выбранной в браузере'
+                    : 'Голоса Схронщиков исключаются из захвата',
+              ),
+              value: _audio,
+              onChanged: (v) => setState(() => _audio = v),
+            ),
           ],
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
         FilledButton(
           onPressed: _selected == null && !kIsWeb
               ? null
-              : () => Navigator.pop(context, (source: _selected, quality: _quality)),
+              : () => Navigator.pop(context, (
+                  source: _selected,
+                  quality: _quality,
+                  audio: _audio,
+                )),
           child: const Text('Показать'),
         ),
       ],
@@ -188,9 +213,15 @@ class _SourceTile extends StatelessWidget {
           children: [
             Expanded(
               child: thumbnail != null && thumbnail.isNotEmpty
-                  ? Image.memory(thumbnail, fit: BoxFit.contain, gaplessPlayback: true)
+                  ? Image.memory(
+                      thumbnail,
+                      fit: BoxFit.contain,
+                      gaplessPlayback: true,
+                    )
                   : Icon(
-                      source.type == SourceType.Screen ? Icons.monitor : Icons.web_asset,
+                      source.type == SourceType.Screen
+                          ? Icons.monitor
+                          : Icons.web_asset,
                       size: 40,
                     ),
             ),
@@ -246,9 +277,12 @@ class _ScreenViewState extends State<ScreenView> {
       return;
     }
     _shown = screen.stream;
-    _renderer.setSrcObject(stream: screen.stream, trackId: screen.trackId).catchError((Object e) {
-      debugPrint('screen renderer failed: $e');
-    });
+    _renderer.muted = true; // Audio is rendered once by CallController.
+    _renderer
+        .setSrcObject(stream: screen.stream, trackId: screen.trackId)
+        .catchError((Object e) {
+          debugPrint('screen renderer failed: $e');
+        });
     setState(() {});
   }
 
@@ -260,13 +294,15 @@ class _ScreenViewState extends State<ScreenView> {
   }
 
   void _openFull() {
-    Navigator.of(context).push(MaterialPageRoute<void>(
-      builder: (_) => _FullScreenView(
-        renderer: _renderer,
-        call: widget.call,
-        sharer: widget.sharer,
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => _FullScreenView(
+          renderer: _renderer,
+          call: widget.call,
+          sharer: widget.sharer,
+        ),
       ),
-    ));
+    );
   }
 
   @override
@@ -283,16 +319,17 @@ class _ScreenViewState extends State<ScreenView> {
           children: [
             if (_ready && hasStream) RTCVideoView(_renderer),
             Positioned.fill(
-              child: GestureDetector(behavior: HitTestBehavior.translucent, onDoubleTap: _openFull),
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onDoubleTap: _openFull,
+              ),
             ),
             if (!hasPicture)
               Center(
                 child: Padding(
                   padding: const EdgeInsets.all(24),
                   child: Text(
-                    hasStream
-                        ? 'Ждём картинку от ${widget.sharer.name}…'
-                        : 'Картинка не пришла. Если долго нет — нажмите «Обновить».',
+                    hasStream ? 'Ждём картинку от ${widget.sharer.name}…' : 'Картинка не пришла. Если долго нет — нажмите «Обновить».',
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Colors.white70),
                   ),
@@ -307,7 +344,10 @@ class _ScreenViewState extends State<ScreenView> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   child: Text(
                     'Экран: ${widget.sharer.name}',
                     style: const TextStyle(color: Colors.white),
@@ -322,7 +362,9 @@ class _ScreenViewState extends State<ScreenView> {
                 tooltip: 'Во весь экран',
                 onPressed: _openFull,
                 icon: const Icon(Icons.fullscreen),
-                style: IconButton.styleFrom(backgroundColor: scheme.surface.withValues(alpha: 0.7)),
+                style: IconButton.styleFrom(
+                  backgroundColor: scheme.surface.withValues(alpha: 0.7),
+                ),
               ),
             ),
           ],
@@ -334,7 +376,11 @@ class _ScreenViewState extends State<ScreenView> {
 
 /// Полноэкранный просмотр с приближением (два пальца или колесо мыши).
 class _FullScreenView extends StatefulWidget {
-  const _FullScreenView({required this.renderer, required this.call, required this.sharer});
+  const _FullScreenView({
+    required this.renderer,
+    required this.call,
+    required this.sharer,
+  });
 
   final RTCVideoRenderer renderer;
   final CallController call;
@@ -350,9 +396,14 @@ class _FullScreenViewState extends State<_FullScreenView> {
   /// Экран компьютера широкий — на телефоне удобнее смотреть боком.
   void _rotate() {
     setState(() => _landscape = !_landscape);
-    SystemChrome.setPreferredOrientations(_landscape
-        ? const [DeviceOrientation.landscapeLeft, DeviceOrientation.landscapeRight]
-        : const []);
+    SystemChrome.setPreferredOrientations(
+      _landscape
+          ? const [
+              DeviceOrientation.landscapeLeft,
+              DeviceOrientation.landscapeRight,
+            ]
+          : const [],
+    );
   }
 
   @override
@@ -415,7 +466,10 @@ class _FullScreenViewState extends State<_FullScreenView> {
                       ),
                     ],
                     const SizedBox(width: 8),
-                    Text('Экран: ${widget.sharer.name}', style: const TextStyle(color: Colors.white)),
+                    Text(
+                      'Экран: ${widget.sharer.name}',
+                      style: const TextStyle(color: Colors.white),
+                    ),
                   ],
                 ),
               ),
