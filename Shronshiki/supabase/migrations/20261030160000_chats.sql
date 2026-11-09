@@ -35,12 +35,7 @@ create index if not exists chat_messages_chat_idx on public.chat_messages (chat_
 create table if not exists public.app_admins (
   user_id uuid primary key references auth.users (id) on delete cascade
 );
-insert into public.app_admins (user_id)
-select p.id
-from public.profiles p
-join auth.users u on u.id = p.id
-where p.display_name = 'AdmiNix' and coalesce(u.is_anonymous, false) = false
-on conflict do nothing;
+-- Bootstrap admins only by a verified UUID, never by display_name.
 
 alter table public.app_admins enable row level security;
 alter table public.chats enable row level security;

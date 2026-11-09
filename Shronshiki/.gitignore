@@ -53,3 +53,6 @@ app.*.map.json
 
 # Собранные APK (могут содержать ключи из config/app_config.json)
 /dist/
+
+# SQL test dependencies
+/test/sql/node_modules/

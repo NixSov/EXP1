@@ -1,6 +1,12 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
+  <script>
+    // Other Shronshiki tabs recognize this surface and reject audio recapture.
+    navigator.mediaDevices?.setCaptureHandleConfig?.({
+      handle: 'shronshiki', exposeOrigin: false, permittedOrigins: ['*']
+    });
+  </script>
   <!-- Заменяется значением --base-href при сборке (сайт живёт в /EXP1/). -->
   <base href="$FLUTTER_BASE_HREF">
 

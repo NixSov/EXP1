@@ -1,3 +1,5 @@
+import '../widgets/file_attachment.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -51,7 +53,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       _timer ??= Timer.periodic(_pollEvery, (_) => unawaited(_poll()));
       unawaited(_poll());
-    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.hidden) {
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden) {
       _timer?.cancel();
       _timer = null;
     }
@@ -89,14 +92,19 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   void _onScroll() {
     // Список перевёрнут: «верх» переписки — это конец прокрутки.
-    if (_scroll.position.pixels > _scroll.position.maxScrollExtent - 300) unawaited(_loadOlder());
+    if (_scroll.position.pixels > _scroll.position.maxScrollExtent - 300) {
+      unawaited(_loadOlder());
+    }
   }
 
   Future<void> _loadOlder() async {
     if (_loadingOlder || _noOlder || _messages.isEmpty) return;
     _loadingOlder = true;
     try {
-      final older = await _repo.messages(widget.chat.id, before: _messages.first.id);
+      final older = await _repo.messages(
+        widget.chat.id,
+        before: _messages.first.id,
+      );
       if (!mounted) return;
       setState(() {
         _messages.insertAll(0, older);
@@ -118,7 +126,13 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       _text.clear();
       await _poll();
       if (_scroll.hasClients) {
-        unawaited(_scroll.animateTo(0, duration: const Duration(milliseconds: 200), curve: Curves.easeOut));
+        unawaited(
+          _scroll.animateTo(
+            0,
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+          ),
+        );
       }
     } catch (e) {
       if (mounted) showError(context, 'Не отправилось: ${describeError(e)}');
@@ -137,10 +151,18 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Выйти из чата?'),
-        content: const Text('Переписка останется у остальных. Вернуться можно по ключу.'),
+        content: const Text(
+          'Переписка останется у остальных. Вернуться можно по ключу.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Выйти')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Выйти'),
+          ),
         ],
       ),
     );
@@ -163,7 +185,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(widget.chat.name, overflow: TextOverflow.ellipsis),
-            Text('Ключ: ${widget.chat.code}', style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              'Ключ: ${widget.chat.code}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ],
         ),
         actions: [
@@ -189,50 +214,68 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
               Container(
                 width: double.infinity,
                 color: scheme.errorContainer,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                child: Text('Нет связи с сервером', style: TextStyle(color: scheme.onErrorContainer)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 6,
+                ),
+                child: Text(
+                  'Нет связи с сервером',
+                  style: TextStyle(color: scheme.onErrorContainer),
+                ),
               ),
             Expanded(
               child: _loading
                   ? Center(
                       child: _error != null
-                          ? Padding(padding: const EdgeInsets.all(24), child: Text(_error!, textAlign: TextAlign.center))
+                          ? Padding(
+                              padding: const EdgeInsets.all(24),
+                              child: Text(_error!, textAlign: TextAlign.center),
+                            )
                           : const CircularProgressIndicator(),
                     )
                   : _messages.isEmpty
-                      ? const Center(
-                          child: Padding(
-                            padding: EdgeInsets.all(24),
-                            child: Text('Сообщений пока нет. Напишите первым!\n'
-                                'Позовите друзей: значок вверху копирует ключ чата.',
-                                textAlign: TextAlign.center),
-                          ),
-                        )
-                      : ListView.builder(
-                          controller: _scroll,
-                          reverse: true,
-                          padding: const EdgeInsets.all(12),
-                          itemCount: _messages.length,
-                          itemBuilder: (context, i) {
-                            final index = _messages.length - 1 - i;
-                            final m = _messages[index];
-                            final previous = index > 0 ? _messages[index - 1] : null;
-                            return ChatBubble(
-                              name: m.name,
-                              body: m.body,
-                              at: m.at,
-                              mine: m.userId != null && m.userId == me,
-                              showName: previous == null ||
-                                  previous.userId != m.userId ||
-                                  m.at.difference(previous.at).inMinutes > 30,
-                            );
-                          },
+                  ? const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(24),
+                        child: Text(
+                          'Сообщений пока нет. Напишите первым!\n'
+                          'Позовите друзей: значок вверху копирует ключ чата.',
+                          textAlign: TextAlign.center,
                         ),
+                      ),
+                    )
+                  : ListView.builder(
+                      controller: _scroll,
+                      reverse: true,
+                      padding: const EdgeInsets.all(12),
+                      itemCount: _messages.length,
+                      itemBuilder: (context, i) {
+                        final index = _messages.length - 1 - i;
+                        final m = _messages[index];
+                        final previous = index > 0
+                            ? _messages[index - 1]
+                            : null;
+                        return ChatBubble(
+                          name: m.name,
+                          body: m.body,
+                          attachment: m.attachment,
+                          messageId: m.id,
+                          roomFile: false,
+                          at: m.at,
+                          mine: m.userId != null && m.userId == me,
+                          showName:
+                              previous == null ||
+                              previous.userId != m.userId ||
+                              m.at.difference(previous.at).inMinutes > 30,
+                        );
+                      },
+                    ),
             ),
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 8, 8, 12),
               child: Row(
                 children: [
+                  FileSendButton(target: widget.chat.id, room: false, peer: ''),
                   Expanded(
                     child: TextField(
                       controller: _text,
@@ -255,7 +298,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                     tooltip: 'Отправить',
                     onPressed: _sending ? null : _send,
                     icon: _sending
-                        ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
                         : const Icon(Icons.send),
                   ),
                 ],

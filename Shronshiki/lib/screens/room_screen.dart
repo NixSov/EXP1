@@ -53,7 +53,8 @@ class _RoomScreenState extends State<RoomScreen> {
   }
 
   void _openSettings() {
-    Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const SettingsScreen()));
+    Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => const SettingsScreen()));
   }
 
   @override
@@ -70,7 +71,10 @@ class _RoomScreenState extends State<RoomScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(_call.room.name, overflow: TextOverflow.ellipsis),
-            Text('Код: ${_call.room.code}', style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              'Код: ${_call.room.code}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
           ],
         ),
         actions: [
@@ -108,7 +112,8 @@ class _RoomScreenState extends State<RoomScreen> {
         return _Message(
           icon: Icons.group_off_outlined,
           title: 'Комната заполнена',
-          text: 'В комнате уже ${_call.room.maxParticipants} участника — это максимум. '
+          text:
+              'В комнате уже ${_call.room.maxParticipants} участника — это максимум. '
               'Попробуйте позже.',
           action: _retryOrBack(context),
         );
@@ -127,18 +132,21 @@ class _RoomScreenState extends State<RoomScreen> {
   }
 
   Widget _retryOrBack(BuildContext context) => Wrap(
-        spacing: 12,
-        runSpacing: 12,
-        alignment: WrapAlignment.center,
-        children: [
-          OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Назад')),
-          FilledButton.icon(
-            onPressed: _call.reconnect,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Повторить'),
-          ),
-        ],
-      );
+    spacing: 12,
+    runSpacing: 12,
+    alignment: WrapAlignment.center,
+    children: [
+      OutlinedButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Назад'),
+      ),
+      FilledButton.icon(
+        onPressed: _call.reconnect,
+        icon: const Icon(Icons.refresh),
+        label: const Text('Повторить'),
+      ),
+    ],
+  );
 
   /// Список устройств (как в SaluteJazz — по стрелочке у кнопки).
   Future<void> _pickDevice({required bool input}) async {
@@ -160,7 +168,10 @@ class _RoomScreenState extends State<RoomScreen> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-                  child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 ),
                 if (list.isEmpty)
                   const ListTile(title: Text('Нет доступных устройств')),
@@ -172,7 +183,9 @@ class _RoomScreenState extends State<RoomScreen> {
                     selected: d.id == current,
                     onTap: () {
                       Navigator.pop(context);
-                      input ? _call.selectInput(d.id) : _call.selectOutput(d.id);
+                      input
+                          ? _call.selectInput(d.id)
+                          : _call.selectOutput(d.id);
                     },
                   ),
                 const SizedBox(height: 8),
@@ -185,15 +198,17 @@ class _RoomScreenState extends State<RoomScreen> {
   }
 
   static IconData _deviceIcon(String icon) => switch (icon) {
-        'speaker' => Icons.volume_up,
-        'earpiece' => Icons.phone_in_talk,
-        'headset' => Icons.headphones,
-        'bluetooth' => Icons.bluetooth_audio,
-        _ => Icons.mic,
-      };
+    'speaker' => Icons.volume_up,
+    'earpiece' => Icons.phone_in_talk,
+    'headset' => Icons.headphones,
+    'bluetooth' => Icons.bluetooth_audio,
+    _ => Icons.mic,
+  };
 
   ({IconData icon, String label}) get _outputLook {
-    final current = _call.outputs.where((d) => d.id == _call.outputId).firstOrNull;
+    final current = _call.outputs
+        .where((d) => d.id == _call.outputId)
+        .firstOrNull;
     return switch (current?.icon) {
       'speaker' => (icon: Icons.volume_up, label: 'Динамик'),
       'earpiece' => (icon: Icons.phone_in_talk, label: 'Телефон'),
@@ -211,13 +226,20 @@ class _RoomScreenState extends State<RoomScreen> {
     }
     final other = _call.screenSharer;
     if (other != null && !other.isLocal) {
-      showError(context, 'Сейчас экран показывает ${other.name}. Показывать может один человек.');
+      showError(
+        context,
+        'Сейчас экран показывает ${other.name}. Показывать может один человек.',
+      );
       return;
     }
     final choice = await pickScreenSource(context, _call);
     if (choice == null || !mounted) return;
     try {
-      await _call.startScreenShare(choice.source, choice.quality);
+      await _call.startScreenShare(
+        choice.source,
+        choice.quality,
+        audio: choice.audio,
+      );
     } catch (e) {
       if (mounted) showError(context, 'Не получилось показать экран: $e');
     }
@@ -262,7 +284,10 @@ class _RoomScreenState extends State<RoomScreen> {
                     style: TextStyle(color: scheme.onPrimaryContainer),
                   ),
                 ),
-                TextButton(onPressed: _call.stopScreenShare, child: const Text('Остановить')),
+                TextButton(
+                  onPressed: _call.stopScreenShare,
+                  child: const Text('Остановить'),
+                ),
               ],
             ),
           ),
@@ -283,7 +308,10 @@ class _RoomScreenState extends State<RoomScreen> {
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              children: [for (final p in participants) _CompactParticipant(participant: p)],
+              children: [
+                for (final p in participants)
+                  _CompactParticipant(participant: p),
+              ],
             ),
           ),
         ] else ...[
@@ -304,7 +332,9 @@ class _RoomScreenState extends State<RoomScreen> {
               crossAxisCount: 2,
               mainAxisSpacing: 12,
               crossAxisSpacing: 12,
-              children: [for (final p in participants) _ParticipantTile(participant: p)],
+              children: [
+                for (final p in participants) _ParticipantTile(participant: p),
+              ],
             ),
           ),
         ],
@@ -334,7 +364,9 @@ class _RoomScreenState extends State<RoomScreen> {
                 icon: output.icon,
                 label: output.label,
                 active: _call.speakerOn,
-                onPressed: _call.canSwitchSpeaker ? _call.toggleSpeaker : _pickOutput,
+                onPressed: _call.canSwitchSpeaker
+                    ? _call.toggleSpeaker
+                    : _pickOutput,
                 onMore: _pickOutput,
               ),
               _ControlButton(
@@ -346,7 +378,9 @@ class _RoomScreenState extends State<RoomScreen> {
               ),
               if (CallController.canShareScreen)
                 _ControlButton(
-                  icon: _call.sharingScreen ? Icons.stop_screen_share : Icons.screen_share,
+                  icon: _call.sharingScreen
+                      ? Icons.stop_screen_share
+                      : Icons.screen_share,
                   label: _call.sharingScreen ? 'Стоп показ' : 'Экран',
                   active: _call.sharingScreen,
                   onPressed: _toggleScreenShare,
@@ -376,7 +410,9 @@ class _ParticipantTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final p = participant;
-    final initial = p.name.isEmpty ? '?' : p.name.characters.first.toUpperCase();
+    final initial = p.name.isEmpty
+        ? '?'
+        : p.name.characters.first.toUpperCase();
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -389,14 +425,19 @@ class _ParticipantTile extends StatelessWidget {
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 border: Border.all(
-                  color: p.speaking ? Colors.greenAccent.shade400 : Colors.transparent,
+                  color: p.speaking
+                      ? Colors.greenAccent.shade400
+                      : Colors.transparent,
                   width: 4,
                 ),
               ),
               child: CircleAvatar(
                 radius: 34,
                 backgroundColor: scheme.primaryContainer,
-                child: Text(initial, style: Theme.of(context).textTheme.headlineMedium),
+                child: Text(
+                  initial,
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
               ),
             ),
             const SizedBox(height: 8),
@@ -417,16 +458,22 @@ class _ParticipantTile extends StatelessWidget {
               ],
             ),
             if (p.sharingScreen)
-              Text('показывает экран',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.primary)),
+              Text(
+                'показывает экран',
+                style: Theme.of(context).textTheme.bodySmall
+                    ?.copyWith(color: scheme.primary),
+              ),
             if (p.viaTurn)
               Text('через TURN', style: Theme.of(context).textTheme.bodySmall),
             if (!p.connected)
               Text(
                 switch (p.connection) {
-                  null || RTCPeerConnectionState.RTCPeerConnectionStateNew => 'ждём ответа…',
-                  RTCPeerConnectionState.RTCPeerConnectionStateConnecting => 'ищем путь…',
-                  RTCPeerConnectionState.RTCPeerConnectionStateDisconnected => 'связь прервалась…',
+                  null || RTCPeerConnectionState.RTCPeerConnectionStateNew =>
+                    'ждём ответа…',
+                  RTCPeerConnectionState.RTCPeerConnectionStateConnecting =>
+                    'ищем путь…',
+                  RTCPeerConnectionState.RTCPeerConnectionStateDisconnected =>
+                    'связь прервалась…',
                   RTCPeerConnectionState.RTCPeerConnectionStateFailed =>
                     'нет прямого пути — нужен TURN',
                   _ => 'подключение…',
@@ -451,7 +498,9 @@ class _CompactParticipant extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final p = participant;
-    final initial = p.name.isEmpty ? '?' : p.name.characters.first.toUpperCase();
+    final initial = p.name.isEmpty
+        ? '?'
+        : p.name.characters.first.toUpperCase();
     return SizedBox(
       width: 76,
       child: Column(
@@ -462,14 +511,18 @@ class _CompactParticipant extends StatelessWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: p.speaking ? Colors.greenAccent.shade400 : Colors.transparent,
+                color: p.speaking
+                    ? Colors.greenAccent.shade400
+                    : Colors.transparent,
                 width: 3,
               ),
             ),
             child: CircleAvatar(
               radius: 20,
               backgroundColor: scheme.primaryContainer,
-              child: p.muted ? Icon(Icons.mic_off, size: 18, color: scheme.error) : Text(initial),
+              child: p.muted
+                  ? Icon(Icons.mic_off, size: 18, color: scheme.error)
+                  : Text(initial),
             ),
           ),
           const SizedBox(height: 4),
@@ -513,7 +566,8 @@ class _ControlButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    final bg = color ?? (active ? scheme.primary : scheme.surfaceContainerHighest);
+    final bg =
+        color ?? (active ? scheme.primary : scheme.surfaceContainerHighest);
     final fg = foreground ?? (active ? scheme.onPrimary : scheme.onSurface);
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -528,7 +582,12 @@ class _ControlButton extends StatelessWidget {
               InkWell(
                 onTap: onPressed,
                 child: Padding(
-                  padding: EdgeInsets.fromLTRB(16, 16, onMore == null ? 16 : 8, 16),
+                  padding: EdgeInsets.fromLTRB(
+                    16,
+                    16,
+                    onMore == null ? 16 : 8,
+                    16,
+                  ),
                   child: Badge(
                     isLabelVisible: badge > 0,
                     label: Text('$badge'),
@@ -555,7 +614,12 @@ class _ControlButton extends StatelessWidget {
 }
 
 class _Message extends StatelessWidget {
-  const _Message({required this.icon, required this.title, required this.text, this.action});
+  const _Message({
+    required this.icon,
+    required this.title,
+    required this.text,
+    this.action,
+  });
 
   final IconData? icon;
   final String title;
@@ -575,7 +639,11 @@ class _Message extends StatelessWidget {
             else
               const CircularProgressIndicator(),
             const SizedBox(height: 16),
-            Text(title, style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center),
+            Text(
+              title,
+              style: Theme.of(context).textTheme.titleLarge,
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 8),
             Text(text, textAlign: TextAlign.center),
             if (action != null) ...[const SizedBox(height: 24), action!],

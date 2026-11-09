@@ -1,3 +1,5 @@
+import '../widgets/file_attachment.dart';
+
 import 'package:flutter/material.dart';
 
 import '../services/call_controller.dart';
@@ -13,10 +15,8 @@ Future<void> showRoomChat(BuildContext context, CallController call) async {
       isScrollControlled: true,
       showDragHandle: true,
       useSafeArea: true,
-      builder: (context) => FractionallySizedBox(
-        heightFactor: 0.8,
-        child: _RoomChat(call: call),
-      ),
+      builder: (context) =>
+          FractionallySizedBox(heightFactor: 0.8, child: _RoomChat(call: call)),
     );
   } finally {
     call.chatOpen = false;
@@ -59,7 +59,9 @@ class _RoomChatState extends State<_RoomChat> {
   /// Текст до курсора заканчивается на «@что-то» — показываем подсказку.
   void _onText() {
     final value = _text.value;
-    final cursor = value.selection.isValid ? value.selection.baseOffset : value.text.length;
+    final cursor = value.selection.isValid
+        ? value.selection.baseOffset
+        : value.text.length;
     final before = value.text.substring(0, cursor.clamp(0, value.text.length));
     final match = RegExp(r'(?:^|\s)@([^\s@]*)$').firstMatch(before);
     final query = match?.group(1);
@@ -77,7 +79,9 @@ class _RoomChatState extends State<_RoomChat> {
 
   void _insertMention(String name) {
     final value = _text.value;
-    final cursor = value.selection.isValid ? value.selection.baseOffset : value.text.length;
+    final cursor = value.selection.isValid
+        ? value.selection.baseOffset
+        : value.text.length;
     final before = value.text.substring(0, cursor);
     final after = value.text.substring(cursor);
     final start = before.lastIndexOf('@');
@@ -93,7 +97,10 @@ class _RoomChatState extends State<_RoomChat> {
     if (m.peerId == _call.peerId) return false;
     final body = m.body.toLowerCase();
     return body.contains('@${_call.displayName.toLowerCase()}') ||
-        RegExp(r'(^|[^\p{L}\p{N}_])@(все|all)($|[^\p{L}\p{N}_])', unicode: true).hasMatch(body);
+        RegExp(
+          r'(^|[^\p{L}\p{N}_])@(все|all)($|[^\p{L}\p{N}_])',
+          unicode: true,
+        ).hasMatch(body);
   }
 
   @override
@@ -116,7 +123,11 @@ class _RoomChatState extends State<_RoomChat> {
     setState(() {});
     // Новое сообщение — прокручиваем к нему (список перевёрнут, низ — это 0).
     if (grew && _scroll.hasClients) {
-      _scroll.animateTo(0, duration: const Duration(milliseconds: 200), curve: Curves.easeOut);
+      _scroll.animateTo(
+        0,
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+      );
     }
   }
 
@@ -131,7 +142,9 @@ class _RoomChatState extends State<_RoomChat> {
       await _call.sendChat(text);
       _text.clear();
     } catch (e) {
-      setState(() => _error = 'Не отправилось. Проверьте связь и попробуйте ещё раз.');
+      setState(
+        () => _error = 'Не отправилось. Проверьте связь и попробуйте ещё раз.',
+      );
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -149,39 +162,50 @@ class _RoomChatState extends State<_RoomChat> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: Row(
               children: [
-                Text('Чат комнаты', style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  'Чат комнаты',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const Spacer(),
-                Text('очистится, когда все выйдут',
-                    style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                  'очистится, когда все выйдут',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ],
             ),
           ),
           const Divider(height: 1),
           Expanded(
             child: !_call.chatSupported
-                ? const _Hint('Чат пока недоступен: выполните в Supabase SQL-миграцию '
-                    '20261026190000_room_chat.sql')
+                ? const _Hint(
+                    'Чат пока недоступен: выполните в Supabase SQL-миграцию '
+                    '20261026190000_room_chat.sql',
+                  )
                 : messages.isEmpty
-                    ? const _Hint('Сообщений пока нет. Напишите первым!')
-                    : ListView.builder(
-                        controller: _scroll,
-                        reverse: true,
-                        padding: const EdgeInsets.all(12),
-                        itemCount: messages.length,
-                        itemBuilder: (context, i) {
-                          final index = messages.length - 1 - i;
-                          final m = messages[index];
-                          final previous = index > 0 ? messages[index - 1] : null;
-                          return ChatBubble(
-                            name: m.name,
-                            body: m.body,
-                            at: m.at,
-                            mine: m.peerId == _call.peerId,
-                            showName: previous == null || previous.peerId != m.peerId,
-                            highlight: _mentionsMe(m),
-                          );
-                        },
-                      ),
+                ? const _Hint('Сообщений пока нет. Напишите первым!')
+                : ListView.builder(
+                    controller: _scroll,
+                    reverse: true,
+                    padding: const EdgeInsets.all(12),
+                    itemCount: messages.length,
+                    itemBuilder: (context, i) {
+                      final index = messages.length - 1 - i;
+                      final m = messages[index];
+                      final previous = index > 0 ? messages[index - 1] : null;
+                      return ChatBubble(
+                        name: m.name,
+                        body: m.body,
+                        attachment: m.attachment,
+                        messageId: m.id,
+                        roomFile: true,
+                        at: m.at,
+                        mine: m.peerId == _call.peerId,
+                        showName:
+                            previous == null || previous.peerId != m.peerId,
+                        highlight: _mentionsMe(m),
+                      );
+                    },
+                  ),
           ),
           if (_error != null)
             Padding(
@@ -193,7 +217,10 @@ class _RoomChatState extends State<_RoomChat> {
               height: 48,
               child: ListView(
                 scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 4,
+                ),
                 children: [
                   for (final c in _suggestions)
                     Padding(
@@ -202,7 +229,9 @@ class _RoomChatState extends State<_RoomChat> {
                         avatar: Icon(
                           c.name == 'все'
                               ? Icons.groups
-                              : (c.inRoom ? Icons.graphic_eq : Icons.person_outline),
+                              : (c.inRoom
+                                    ? Icons.graphic_eq
+                                    : Icons.person_outline),
                           size: 18,
                         ),
                         label: Text('@${c.name}'),
@@ -218,6 +247,11 @@ class _RoomChatState extends State<_RoomChat> {
               padding: const EdgeInsets.fromLTRB(12, 8, 8, 12),
               child: Row(
                 children: [
+                  FileSendButton(
+                    target: _call.room.id,
+                    room: true,
+                    peer: _call.peerId,
+                  ),
                   Expanded(
                     child: TextField(
                       controller: _text,
@@ -264,9 +298,9 @@ class _Hint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Text(text, textAlign: TextAlign.center),
-        ),
-      );
+    child: Padding(
+      padding: const EdgeInsets.all(24),
+      child: Text(text, textAlign: TextAlign.center),
+    ),
+  );
 }

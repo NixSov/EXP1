@@ -60,7 +60,24 @@ void FlutterWindow::SetUpCallChannel() {
              std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
                  result) {
         const std::string& method = call.method_name();
-        if (method == "start") {
+        if (method == "isOwnWindow") {
+          bool own = true; // Unknown/stale windows fail closed.
+          const auto* args = std::get_if<flutter::EncodableMap>(call.arguments());
+          if (args) {
+            auto it = args->find(flutter::EncodableValue("source"));
+            if (it != args->end()) {
+              const auto* text = std::get_if<std::string>(&it->second);
+              if (text) try {
+                auto hwnd = reinterpret_cast<HWND>(static_cast<uintptr_t>(std::stoull(*text)));
+                DWORD pid = 0;
+                if (IsWindow(hwnd) && GetWindowThreadProcessId(hwnd, &pid))
+                  own = pid == GetCurrentProcessId();
+              } catch (...) {}
+            }
+          }
+          result->Success(flutter::EncodableValue(own));
+          return;
+        } else if (method == "start") {
           call_active_ = true;
         } else if (method == "stop") {
           call_active_ = false;

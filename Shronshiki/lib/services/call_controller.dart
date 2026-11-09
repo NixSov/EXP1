@@ -1,3 +1,7 @@
+import 'screen_audio_safety.dart';
+
+import 'package:flutter/services.dart';
+
 import 'dart:async';
 import 'dart:io' show Platform;
 import 'dart:math';
@@ -18,10 +22,25 @@ enum CallStatus { connecting, inRoom, full, failed, ended }
 /// Качество демонстрации экрана. Через TURN каждый зритель тратит трафик,
 /// поэтому по умолчанию — экономное.
 enum ScreenQuality {
-  economy(fps: 5, bitrate: 300000, label: 'Экономно', hint: '5 кадров/с, ~130 МБ в час на зрителя'),
-  clear(fps: 10, bitrate: 900000, label: 'Чётко', hint: '10 кадров/с, ~400 МБ в час на зрителя');
+  economy(
+    fps: 5,
+    bitrate: 300000,
+    label: 'Экономно',
+    hint: '5 кадров/с, ~130 МБ в час на зрителя',
+  ),
+  clear(
+    fps: 10,
+    bitrate: 900000,
+    label: 'Чётко',
+    hint: '10 кадров/с, ~400 МБ в час на зрителя',
+  );
 
-  const ScreenQuality({required this.fps, required this.bitrate, required this.label, required this.hint});
+  const ScreenQuality({
+    required this.fps,
+    required this.bitrate,
+    required this.label,
+    required this.hint,
+  });
 
   final int fps;
   final int bitrate;
@@ -55,12 +74,17 @@ class Participant {
   RTCPeerConnectionState? connection;
 
   bool get connected =>
-      isLocal || connection == RTCPeerConnectionState.RTCPeerConnectionStateConnected;
+      isLocal ||
+      connection == RTCPeerConnectionState.RTCPeerConnectionStateConnected;
 }
 
 /// Устройство ввода или вывода звука.
 class AudioDevice {
-  const AudioDevice({required this.id, required this.label, required this.icon});
+  const AudioDevice({
+    required this.id,
+    required this.label,
+    required this.icon,
+  });
 
   final String id;
   final String label;
@@ -79,12 +103,13 @@ class _Peer {
   /// Видеоканал для демонстрации экрана: заводится сразу при соединении,
   /// а картинка подключается в него без повторного согласования.
   RTCRtpSender? videoSender;
+  RTCRtpSender? screenAudioSender;
+  final Map<String, RTCVideoRenderer> audioRenderers = {};
 
   /// Сколько байт уже прошло по выбранной паре кандидатов (для счётчика TURN).
   int turnBytesSeen = 0;
 
   /// В браузере чужой голос сам не играет — его воспроизводит этот рендерер.
-  RTCVideoRenderer? audioRenderer;
 
   /// Входящая демонстрация экрана от этого участника.
   MediaStream? remoteVideo;
@@ -103,8 +128,8 @@ class CallController extends ChangeNotifier {
     required this.config,
     required this.settings,
     SupabaseClient? client,
-  })  : _db = client ?? Supabase.instance.client,
-        peerId = _randomId();
+  }) : _db = client ?? Supabase.instance.client,
+       peerId = _randomId();
 
   final Room room;
   final String displayName;
@@ -200,10 +225,14 @@ class CallController extends ChangeNotifier {
 
   static String _randomId() {
     final r = Random.secure();
-    return List.generate(16, (_) => r.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+    return List.generate(
+      16,
+      (_) => r.nextInt(256).toRadixString(16).padLeft(2, '0'),
+    ).join();
   }
 
-  static bool get _isMobile => !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+  static bool get _isMobile =>
+      !kIsWeb && (Platform.isAndroid || Platform.isIOS);
 
   static bool get _isAndroid => !kIsWeb && Platform.isAndroid;
 
@@ -212,7 +241,11 @@ class CallController extends ChangeNotifier {
   /// Показывать экран можно с компьютера: программа для Windows или браузер
   /// на компьютере. Смотреть — везде.
   static bool get canShareScreen => kIsWeb
-      ? const {TargetPlatform.windows, TargetPlatform.macOS, TargetPlatform.linux}.contains(defaultTargetPlatform)
+      ? const {
+          TargetPlatform.windows,
+          TargetPlatform.macOS,
+          TargetPlatform.linux,
+        }.contains(defaultTargetPlatform)
       : Platform.isWindows;
 
   /// Я показываю экран.
@@ -237,12 +270,14 @@ class CallController extends ChangeNotifier {
   }
 
   /// Сколько участников на связи через TURN.
-  int get turnPeers => _participants.values.where((p) => !p.isLocal && p.viaTurn).length;
+  int get turnPeers =>
+      _participants.values.where((p) => !p.isLocal && p.viaTurn).length;
 
   bool get speakerOn => outputId == 'speaker';
 
   /// Звонок идёт или подключается.
-  bool get isActive => status == CallStatus.connecting || status == CallStatus.inRoom;
+  bool get isActive =>
+      status == CallStatus.connecting || status == CallStatus.inRoom;
 
   /// Сервер давно не отвечает. Звук при этом идёт напрямую и может продолжаться.
   bool get serverLost =>
@@ -262,7 +297,9 @@ class CallController extends ChangeNotifier {
           'video': false,
         });
       } catch (e) {
-        _fail('Нет доступа к микрофону. Разрешите его приложению в настройках телефона.\n($e)');
+        _fail(
+          'Нет доступа к микрофону. Разрешите его приложению в настройках телефона.\n($e)',
+        );
         return;
       }
       if (_disposed) return;
@@ -276,7 +313,8 @@ class CallController extends ChangeNotifier {
       // Свежий список TURN с сервера; не ответил — останется сохранённый.
       await ServerIce.refresh(_db);
       if (_disposed) return;
-      navigator.mediaDevices.ondevicechange = (_) => unawaited(refreshDevices());
+      navigator.mediaDevices.ondevicechange = (_) =>
+          unawaited(refreshDevices());
       await refreshDevices(initial: true);
     }
     _participants[peerId] = Participant(
@@ -311,7 +349,11 @@ class CallController extends ChangeNotifier {
     _pollInFlight = true;
     final wasLost = serverLost;
     try {
-      final result = await signaling.poll(name: displayName, muted: muted, joinedAt: _joinedAt);
+      final result = await signaling.poll(
+        name: displayName,
+        muted: muted,
+        joinedAt: _joinedAt,
+      );
       if (_disposed || signaling != _signaling || !isActive) return;
       _lastServerContact = DateTime.now();
       if (result.full) {
@@ -319,7 +361,9 @@ class CallController extends ChangeNotifier {
           _setFull();
         } else {
           // Пока нас не было (сеть пропала), место заняли — выходим.
-          _fail('Связь с комнатой пропала, а ваше место занял другой участник.');
+          _fail(
+            'Связь с комнатой пропала, а ваше место занял другой участник.',
+          );
         }
         return;
       }
@@ -340,8 +384,10 @@ class CallController extends ChangeNotifier {
       debugPrint('poll failed: $e');
       if (status == CallStatus.connecting &&
           DateTime.now().difference(_connectStarted!) > _connectLimit) {
-        _fail('Не удалось подключиться к комнате за ${_connectLimit.inSeconds} секунд. '
-            'Проверьте интернет.\n(${_shortError(_lastServerError)})');
+        _fail(
+          'Не удалось подключиться к комнате за ${_connectLimit.inSeconds} секунд. '
+          'Проверьте интернет.\n(${_shortError(_lastServerError)})',
+        );
         return;
       }
       if (serverLost != wasLost) notifyListeners();
@@ -353,9 +399,11 @@ class CallController extends ChangeNotifier {
       _schedulePoll(Duration.zero);
     } else {
       final settling = _participants.values.any((p) => !p.connected);
-      _schedulePoll(settling || status == CallStatus.connecting
-          ? _fastPoll
-          : (_chatOpen ? _chatPoll : _slowPoll));
+      _schedulePoll(
+        settling || status == CallStatus.connecting
+            ? _fastPoll
+            : (_chatOpen ? _chatPoll : _slowPoll),
+      );
     }
   }
 
@@ -363,7 +411,9 @@ class CallController extends ChangeNotifier {
     if (messages.isEmpty) return;
     chat.addAll(messages);
     if (chat.length > _chatLimit) chat.removeRange(0, chat.length - _chatLimit);
-    if (!_chatOpen) unreadChat += messages.where((m) => m.peerId != peerId).length;
+    if (!_chatOpen) {
+      unreadChat += messages.where((m) => m.peerId != peerId).length;
+    }
   }
 
   /// Имена для подсказки «@»: бывавшие в комнате, а если сервер этого не умеет —
@@ -384,7 +434,9 @@ class CallController extends ChangeNotifier {
   Future<void> sendChat(String text) async {
     final body = text.trim();
     final signaling = _signaling;
-    if (body.isEmpty || signaling == null || status != CallStatus.inRoom) return;
+    if (body.isEmpty || signaling == null || status != CallStatus.inRoom) {
+      return;
+    }
     await signaling.sendChat(body);
     _schedulePoll(Duration.zero);
   }
@@ -546,6 +598,14 @@ class CallController extends ChangeNotifier {
           ),
         );
         peer.videoSender = transceiver.sender;
+        final audio = await pc.addTransceiver(
+          kind: RTCRtpMediaType.RTCRtpMediaTypeAudio,
+          init: RTCRtpTransceiverInit(
+            direction: TransceiverDirection.SendRecv,
+            streams: [await _screenLabelStream()],
+          ),
+        );
+        peer.screenAudioSender = audio.sender;
       } catch (e) {
         debugPrint('video transceiver failed: $e');
       }
@@ -566,16 +626,19 @@ class CallController extends ChangeNotifier {
         participant.connection = state;
         notifyListeners();
       }
-      final lost = state == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
+      final lost =
+          state == RTCPeerConnectionState.RTCPeerConnectionStateFailed ||
           state == RTCPeerConnectionState.RTCPeerConnectionStateDisconnected ||
           state == RTCPeerConnectionState.RTCPeerConnectionStateClosed;
       if (lost && !_presentIds.contains(remoteId) && _peers[remoteId] == peer) {
         // Участника уже нет в комнате, и связь с ним пропала — убираем.
         _removeParticipant(remoteId);
         notifyListeners();
-      } else if (lost && state != RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
+      } else if (lost &&
+          state != RTCPeerConnectionState.RTCPeerConnectionStateClosed) {
         _scheduleIceRestart(remoteId);
-      } else if (state == RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
+      } else if (state ==
+          RTCPeerConnectionState.RTCPeerConnectionStateConnected) {
         peer.restartTimer?.cancel();
       }
     };
@@ -586,7 +649,10 @@ class CallController extends ChangeNotifier {
     pc.onTrack = (event) {
       if (event.track.kind == 'audio') {
         final stream = event.streams.firstOrNull;
-        if (kIsWeb && stream != null) unawaited(_playInBrowser(peer, stream));
+        if (kIsWeb && stream != null) {
+          final screen = stream.id.startsWith('screen-');
+          unawaited(_playInBrowser(peer, stream, screen: screen));
+        }
         return;
       }
       if (event.track.kind != 'video') return;
@@ -599,7 +665,8 @@ class CallController extends ChangeNotifier {
 
   Future<void> _callPeer(String remoteId, {bool iceRestart = false}) async {
     try {
-      final peer = _peers[remoteId] ?? await _createPeer(remoteId, initiator: true);
+      final peer =
+          _peers[remoteId] ?? await _createPeer(remoteId, initiator: true);
       // Без offerToReceive*: с ними libwebrtc меняет направление видеоканала.
       final offer = await peer.pc.createOffer({
         if (iceRestart) 'iceRestart': true,
@@ -630,28 +697,29 @@ class CallController extends ChangeNotifier {
     final peer = _peers.remove(remoteId);
     if (peer == null) return;
     peer.restartTimer?.cancel();
-    final renderer = peer.audioRenderer;
-    peer.audioRenderer = null;
-    if (renderer != null) {
-      renderer.srcObject = null;
-      unawaited(renderer.dispose());
+    for (final audio in peer.audioRenderers.values) {
+      audio.srcObject = null;
+      unawaited(audio.dispose());
     }
+    peer.audioRenderers.clear();
     unawaited(peer.pc.close().catchError((_) {}));
   }
 
-  Future<void> _playInBrowser(_Peer peer, MediaStream stream) async {
-    final renderer = peer.audioRenderer ?? RTCVideoRenderer();
-    if (peer.audioRenderer == null) {
-      await renderer.initialize();
-      peer.audioRenderer = renderer;
+  Future<void> _playInBrowser(
+    _Peer peer,
+    MediaStream stream, {
+    bool screen = false,
+  }) async {
+    if (peer.audioRenderers.containsKey(stream.id)) return;
+    final renderer = RTCVideoRenderer();
+    peer.audioRenderers[stream.id] = renderer;
+    await renderer.initialize();
+    if (_disposed || !_peers.containsValue(peer)) {
+      await renderer.dispose();
+      return;
     }
     renderer.srcObject = stream;
-    final output = outputId;
-    if (output != null) {
-      try {
-        await renderer.audioOutput(output);
-      } catch (_) {}
-    }
+    if (outputId != null) await renderer.audioOutput(outputId!);
   }
 
   void _sendSignal(String to, String kind, Map<String, dynamic> data) {
@@ -669,25 +737,38 @@ class CallController extends ChangeNotifier {
             peer = await _createPeer(from, initiator: false);
           }
           await peer.pc.setRemoteDescription(
-              RTCSessionDescription(data['sdp'] as String?, data['sdpType'] as String?));
+            RTCSessionDescription(
+              data['sdp'] as String?,
+              data['sdpType'] as String?,
+            ),
+          );
           peer.remoteDescriptionSet = true;
           await _flushCandidates(peer);
           final fresh = peer.videoSender == null;
           if (fresh) await _adoptVideoChannel(peer);
           final answer = await peer.pc.createAnswer({});
           await peer.pc.setLocalDescription(answer);
-          _sendSignal(from, 'answer', {'sdp': answer.sdp, 'sdpType': answer.type});
+          _sendSignal(from, 'answer', {
+            'sdp': answer.sdp,
+            'sdpType': answer.type,
+          });
           if (fresh) await _attachScreen(from, peer);
         case 'answer':
           final peer = _peers[from];
           if (peer == null) return;
           await peer.pc.setRemoteDescription(
-              RTCSessionDescription(data['sdp'] as String?, data['sdpType'] as String?));
+            RTCSessionDescription(
+              data['sdp'] as String?,
+              data['sdpType'] as String?,
+            ),
+          );
           peer.remoteDescriptionSet = true;
           await _flushCandidates(peer);
         case 'screen':
           final participant = _participants[from];
-          if (participant != null) participant.sharingScreen = data['on'] == true;
+          if (participant != null) {
+            participant.sharingScreen = data['on'] == true;
+          }
           notifyListeners();
         case 'bye':
           _presentIds.remove(from);
@@ -726,7 +807,8 @@ class CallController extends ChangeNotifier {
 
   Future<void> toggleMute() async {
     muted = !muted;
-    for (final track in _localStream?.getAudioTracks() ?? <MediaStreamTrack>[]) {
+    for (final track
+        in _localStream?.getAudioTracks() ?? <MediaStreamTrack>[]) {
       track.enabled = !muted;
     }
     final me = _participants[peerId];
@@ -760,7 +842,9 @@ class CallController extends ChangeNotifier {
     try {
       if (kIsWeb) {
         for (final peer in _peers.values) {
-          await peer.audioRenderer?.audioOutput(id);
+          for (final renderer in peer.audioRenderers.values) {
+            await renderer.audioOutput(id);
+          }
         }
       } else {
         await Helper.selectAudioOutput(id);
@@ -789,7 +873,10 @@ class CallController extends ChangeNotifier {
   Future<void> _switchBrowserMic(String id) async {
     final constraints = Map<String, dynamic>.from(settings.audioConstraints());
     constraints['deviceId'] = {'exact': id};
-    final fresh = await navigator.mediaDevices.getUserMedia({'audio': constraints, 'video': false});
+    final fresh = await navigator.mediaDevices.getUserMedia({
+      'audio': constraints,
+      'video': false,
+    });
     final track = fresh.getAudioTracks().firstOrNull;
     if (track == null || _disposed) return;
     track.enabled = !muted;
@@ -808,8 +895,11 @@ class CallController extends ChangeNotifier {
   /// Какой микрофон Android включит сам для выбранного выхода.
   String? _inputFor(String outputId) {
     if (!_isAndroid) return null;
-    if (outputId == 'bluetooth' && inputs.any((d) => d.id == 'bluetooth')) return 'bluetooth';
-    if (outputId == 'wired-headset' && inputs.any((d) => d.id == 'wired-headset')) {
+    if (outputId == 'bluetooth' && inputs.any((d) => d.id == 'bluetooth')) {
+      return 'bluetooth';
+    }
+    if (outputId == 'wired-headset' &&
+        inputs.any((d) => d.id == 'wired-headset')) {
       return 'wired-headset';
     }
     return inputs.where((d) => d.icon == 'mic').firstOrNull?.id;
@@ -828,24 +918,34 @@ class CallController extends ChangeNotifier {
     if (_disposed) return;
     final oldOutputIds = outputs.map((d) => d.id).toSet();
 
-    final builtinMics = all.where((d) => d.kind == 'audioinput' && d.deviceId.startsWith('microphone')).length;
+    final builtinMics = all
+        .where(
+          (d) => d.kind == 'audioinput' && d.deviceId.startsWith('microphone'),
+        )
+        .length;
     inputs = [
-      for (final d in all.where((d) => d.kind == 'audioinput')) _describeInput(d, builtinMics),
+      for (final d in all.where((d) => d.kind == 'audioinput'))
+        _describeInput(d, builtinMics),
     ];
     outputs = [
-      for (final d in all.where((d) => d.kind == 'audiooutput')) _describeOutput(d),
+      for (final d in all.where((d) => d.kind == 'audiooutput'))
+        _describeOutput(d),
     ];
     final ids = outputs.map((d) => d.id).toSet();
 
     if (_isAndroid) {
-      final newHeadset = ids.difference(oldOutputIds).where((id) => id == 'bluetooth' || id == 'wired-headset');
+      final newHeadset = ids
+          .difference(oldOutputIds)
+          .where((id) => id == 'bluetooth' || id == 'wired-headset');
       String? target;
       if (initial) {
         target = ids.contains('bluetooth')
             ? 'bluetooth'
             : ids.contains('wired-headset')
-                ? 'wired-headset'
-                : (settings.speakerByDefault || !ids.contains('earpiece') ? 'speaker' : 'earpiece');
+            ? 'wired-headset'
+            : (settings.speakerByDefault || !ids.contains('earpiece')
+                  ? 'speaker'
+                  : 'earpiece');
       } else if (newHeadset.isNotEmpty) {
         target = newHeadset.first;
       } else if (outputId != null && !ids.contains(outputId)) {
@@ -865,16 +965,40 @@ class CallController extends ChangeNotifier {
 
   static AudioDevice _describeInput(MediaDeviceInfo d, int builtinMics) {
     final id = d.deviceId;
-    if (!_isAndroid) return AudioDevice(id: id, label: d.label.isEmpty ? 'Микрофон' : d.label, icon: 'mic');
-    if (id == 'wired-headset') {
-      return AudioDevice(id: id, label: 'Микрофон проводной гарнитуры', icon: 'headset');
+    if (!_isAndroid) {
+      return AudioDevice(
+        id: id,
+        label: d.label.isEmpty ? 'Микрофон' : d.label,
+        icon: 'mic',
+      );
     }
-    if (id == 'bluetooth') return AudioDevice(id: id, label: 'Bluetooth-гарнитура', icon: 'bluetooth');
+    if (id == 'wired-headset') {
+      return AudioDevice(
+        id: id,
+        label: 'Микрофон проводной гарнитуры',
+        icon: 'headset',
+      );
+    }
+    if (id == 'bluetooth') {
+      return AudioDevice(
+        id: id,
+        label: 'Bluetooth-гарнитура',
+        icon: 'bluetooth',
+      );
+    }
     var label = 'Микрофон телефона';
     if (builtinMics > 1) {
       final address = id.replaceFirst('microphone-', '').toLowerCase();
-      const names = {'bottom': 'нижний', 'back': 'задний', 'top': 'верхний', 'front': 'передний'};
-      final name = names.entries.where((e) => address.contains(e.key)).firstOrNull?.value;
+      const names = {
+        'bottom': 'нижний',
+        'back': 'задний',
+        'top': 'верхний',
+        'front': 'передний',
+      };
+      final name = names.entries
+          .where((e) => address.contains(e.key))
+          .firstOrNull
+          ?.value;
       label = name != null ? '$label ($name)' : '$label ($address)';
     }
     return AudioDevice(id: id, label: label, icon: 'mic');
@@ -882,25 +1006,40 @@ class CallController extends ChangeNotifier {
 
   static AudioDevice _describeOutput(MediaDeviceInfo d) {
     final id = d.deviceId;
-    if (!_isAndroid) return AudioDevice(id: id, label: d.label.isEmpty ? 'Динамики' : d.label, icon: 'speaker');
+    if (!_isAndroid) {
+      return AudioDevice(
+        id: id,
+        label: d.label.isEmpty ? 'Динамики' : d.label,
+        icon: 'speaker',
+      );
+    }
     return switch (id) {
       'speaker' => AudioDevice(id: id, label: 'Динамик', icon: 'speaker'),
-      'earpiece' => AudioDevice(id: id, label: 'Телефон (у уха)', icon: 'earpiece'),
-      'wired-headset' => AudioDevice(id: id, label: 'Проводные наушники', icon: 'headset'),
+      'earpiece' => AudioDevice(
+        id: id,
+        label: 'Телефон (у уха)',
+        icon: 'earpiece',
+      ),
+      'wired-headset' => AudioDevice(
+        id: id,
+        label: 'Проводные наушники',
+        icon: 'headset',
+      ),
       'bluetooth' => AudioDevice(
-          id: id,
-          label: d.label.isEmpty || d.label.toLowerCase().contains('bluetooth')
-              ? 'Bluetooth-наушники'
-              : 'Bluetooth: ${d.label}',
-          icon: 'bluetooth',
-        ),
+        id: id,
+        label: d.label.isEmpty || d.label.toLowerCase().contains('bluetooth')
+            ? 'Bluetooth-наушники'
+            : 'Bluetooth: ${d.label}',
+        icon: 'bluetooth',
+      ),
       _ => AudioDevice(id: id, label: d.label, icon: 'speaker'),
     };
   }
 
   /// Как долго я в комнате (для экрана).
-  Duration get inRoomFor =>
-      _admittedAt == null ? Duration.zero : DateTime.now().difference(_admittedAt!);
+  Duration get inRoomFor => _admittedAt == null
+      ? Duration.zero
+      : DateTime.now().difference(_admittedAt!);
 
   // ---------------------------------------------------------------------------
   // Индикатор голоса: уровни звука из статистики WebRTC
@@ -908,7 +1047,10 @@ class CallController extends ChangeNotifier {
 
   void _startStats() {
     _statsTimer?.cancel();
-    _statsTimer = Timer.periodic(const Duration(milliseconds: 350), (_) => _pollStats());
+    _statsTimer = Timer.periodic(
+      const Duration(milliseconds: 350),
+      (_) => _pollStats(),
+    );
   }
 
   bool _polling = false;
@@ -956,7 +1098,8 @@ class CallController extends ChangeNotifier {
           }
         }
         if (participant != null) {
-          final speaking = !participant.muted && remoteLevel > _speakingThreshold;
+          final speaking =
+              !participant.muted && remoteLevel > _speakingThreshold;
           if (participant.speaking != speaking) {
             participant.speaking = speaking;
             changed = true;
@@ -975,9 +1118,14 @@ class CallController extends ChangeNotifier {
       final now = DateTime.now();
       final last = _lastUsageTick;
       _lastUsageTick = now;
-      final talking = status == CallStatus.inRoom && _participants.values.any((p) => !p.isLocal && p.connected);
+      final talking =
+          status == CallStatus.inRoom &&
+          _participants.values.any((p) => !p.isLocal && p.connected);
       if (last != null && talking) {
-        UsageMeter.addCallTime(now.difference(last).inMilliseconds.clamp(0, 5000), turn: ownTurn);
+        UsageMeter.addCallTime(
+          now.difference(last).inMilliseconds.clamp(0, 5000),
+          turn: ownTurn,
+        );
       }
     } finally {
       _polling = false;
@@ -987,20 +1135,28 @@ class CallController extends ChangeNotifier {
 
   /// Выбранная пара ICE-кандидатов: идёт ли она через relay (TURN) с моей
   /// стороны или с чужой, и сколько байт по ней прошло.
-  static ({bool localRelay, bool remoteRelay, int bytes})? _selectedPair(List<StatsReport> reports) {
+  static ({bool localRelay, bool remoteRelay, int bytes})? _selectedPair(
+    List<StatsReport> reports,
+  ) {
     final byId = {for (final r in reports) r.id: r};
     String? pairId;
     for (final r in reports) {
-      if (r.type == 'transport' && r.values['selectedCandidatePairId'] is String) {
+      if (r.type == 'transport' &&
+          r.values['selectedCandidatePairId'] is String) {
         pairId = r.values['selectedCandidatePairId'] as String;
       }
     }
     final pair = pairId != null
         ? byId[pairId]
-        : reports.where((r) =>
-            r.type == 'candidate-pair' &&
-            r.values['state'] == 'succeeded' &&
-            (r.values['nominated'] == true || r.values['selected'] == true)).firstOrNull;
+        : reports
+              .where(
+                (r) =>
+                    r.type == 'candidate-pair' &&
+                    r.values['state'] == 'succeeded' &&
+                    (r.values['nominated'] == true ||
+                        r.values['selected'] == true),
+              )
+              .firstOrNull;
     if (pair == null) return null;
     bool relay(Object? id) => byId[id]?.values['candidateType'] == 'relay';
     int count(String key) => (pair.values[key] as num?)?.toInt() ?? 0;
@@ -1022,7 +1178,19 @@ class CallController extends ChangeNotifier {
   /// подписываем своим потоком — до createAnswer, чтобы это попало в answer.
   Future<void> _adoptVideoChannel(_Peer peer) async {
     try {
-      for (final t in await peer.pc.getTransceivers()) {
+      final transceivers = await peer.pc.getTransceivers();
+      final audioChannels = transceivers
+          .where((x) => x.receiver.track?.kind == 'audio')
+          .toList();
+      for (final t in transceivers) {
+        if (t.receiver.track?.kind == 'audio' && t.receiver.track?.id != null) {
+          if (audioChannels.length > 1 && t == audioChannels.last) {
+            await t.setDirection(TransceiverDirection.SendRecv);
+            await t.sender.setStreams([await _screenLabelStream()]);
+            peer.screenAudioSender = t.sender;
+          }
+          continue;
+        }
         if (t.receiver.track?.kind != 'video') continue;
         await t.setDirection(TransceiverDirection.SendRecv);
         try {
@@ -1031,7 +1199,6 @@ class CallController extends ChangeNotifier {
           debugPrint('video setStreams failed: $e');
         }
         peer.videoSender = t.sender;
-        return;
       }
     } catch (e) {
       debugPrint('video channel failed: $e');
@@ -1043,6 +1210,9 @@ class CallController extends ChangeNotifier {
     final track = _screenCapture?.getVideoTracks().firstOrNull;
     if (track == null) return;
     await _sendScreenTo(peer, track);
+    await peer.screenAudioSender?.replaceTrack(
+      _screenCapture?.getAudioTracks().firstOrNull,
+    );
     _sendSignal(remoteId, 'screen', {'on': true});
   }
 
@@ -1063,7 +1233,8 @@ class CallController extends ChangeNotifier {
         e.maxFramerate = _screenQuality.fps;
       }
       // Текст на экране важнее плавности.
-      params.degradationPreference = RTCDegradationPreference.MAINTAIN_RESOLUTION;
+      params.degradationPreference =
+          RTCDegradationPreference.MAINTAIN_RESOLUTION;
       await sender.setParameters(params);
     } catch (e) {
       debugPrint('screen to peer failed: $e');
@@ -1071,19 +1242,35 @@ class CallController extends ChangeNotifier {
   }
 
   /// Экраны и окна для выбора (только Windows).
-  Future<List<DesktopCapturerSource>> screenSources() => desktopCapturer.getSources(
+  Future<List<DesktopCapturerSource>> screenSources() =>
+      desktopCapturer.getSources(
         types: [SourceType.Screen, SourceType.Window],
         thumbnailSize: ThumbnailSize(320, 180),
       );
 
   /// Начинает показ выбранного экрана или окна. В браузере [source] не нужен:
   /// экран или окно выбирают в окне самого браузера.
-  Future<void> startScreenShare(DesktopCapturerSource? source, ScreenQuality quality) async {
+  Future<void> startScreenShare(
+    DesktopCapturerSource? source,
+    ScreenQuality quality, {
+    bool audio = false,
+  }) async {
     if (!canShareScreen || status != CallStatus.inRoom) return;
     await _stopCapture();
     _screenQuality = quality;
+    // Windows system capture excludes this process in the pinned WebRTC backend.
+    // For an explicit window, never include Shronshiki itself.
+    if (audio && !kIsWeb && source?.type == SourceType.Window) {
+      final own = await const MethodChannel('shronshiki/call')
+          .invokeMethod<bool>('isOwnWindow', {'source': source!.id});
+      if (own != false) audio = false;
+    }
     final capture = await navigator.mediaDevices.getDisplayMedia({
-      'audio': false,
+      'audio': audio,
+      if (kIsWeb) 'selfBrowserSurface': 'exclude',
+      if (kIsWeb) 'systemAudio': 'exclude',
+      if (kIsWeb) 'preferCurrentTab': false,
+      if (kIsWeb) 'surfaceSwitching': 'exclude',
       'video': kIsWeb || source == null
           ? {'frameRate': quality.fps}
           : {
@@ -1091,6 +1278,20 @@ class CallController extends ChangeNotifier {
               'mandatory': {'frameRate': quality.fps.toDouble()},
             },
     });
+    try {
+      if (audio && capture.getAudioTracks().isEmpty) {
+        throw StateError(
+          'Источник не передал звук. Выберите вкладку со звуком или выключите передачу звука.',
+        );
+      }
+      await validateScreenAudio(capture);
+    } catch (_) {
+      for (final t in capture.getTracks()) {
+        await t.stop();
+      }
+      await capture.dispose();
+      rethrow;
+    }
     if (_disposed || !isActive) {
       for (final t in capture.getTracks()) {
         await t.stop();
@@ -1103,6 +1304,9 @@ class CallController extends ChangeNotifier {
     track?.onEnded = () => unawaited(stopScreenShare());
     for (final entry in _peers.entries.toList()) {
       await _sendScreenTo(entry.value, track);
+      await entry.value.screenAudioSender?.replaceTrack(
+        capture.getAudioTracks().firstOrNull,
+      );
       _sendSignal(entry.key, 'screen', {'on': true});
     }
     notifyListeners();
@@ -1113,6 +1317,7 @@ class CallController extends ChangeNotifier {
     for (final entry in _peers.entries.toList()) {
       _sendSignal(entry.key, 'screen', {'on': false});
       await _sendScreenTo(entry.value, null);
+      await entry.value.screenAudioSender?.replaceTrack(null);
     }
     await _stopCapture();
     notifyListeners();

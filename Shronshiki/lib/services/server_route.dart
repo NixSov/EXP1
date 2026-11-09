@@ -256,7 +256,8 @@ class _RoutingClient extends http.BaseClient {
       // Посреднику на Apps Script запрос нужно упаковать — без копии не получится.
       if (envelope && attempt == null) continue;
       // Тело повторно отправить можно только у http.Request — иначе одна попытка.
-      final canRetry = attempt != null && !last;
+      final canRetry = attempt != null && !last &&
+          (request.method == 'GET' || request.method == 'HEAD');
       if (via != null) UsageMeter.countProxyRequest();
       final sw = Stopwatch()..start();
       try {
@@ -265,12 +266,13 @@ class _RoutingClient extends http.BaseClient {
             : _inner.send(attempt ?? (request..persistentConnection = false));
         // Провайдер может не рвать соединение, а «подвешивать» его. Долго не ждём:
         // напрямую — 6 секунд, через посредника — 15, потом пробуем другой путь.
-        if (canRetry) sending = sending.timeout(Duration(seconds: via == null ? 6 : 15));
+        sending = sending.timeout(Duration(seconds: via == null ? 6 : 15));
         final response = await sending;
-        if (via != null && _proxyDown(response) && canRetry) {
+        if (via != null && _proxyDown(response)) {
           // Посредник не работает (приостановлен за лимиты, ошибка шлюза) — дальше.
-          unawaited(response.stream.drain<void>().catchError((_) {}));
           _route._proxyFailed(via);
+          if (!canRetry) return response;
+          unawaited(response.stream.drain<void>().catchError((_) {}));
           continue;
         }
         if (via == null) {
@@ -280,12 +282,13 @@ class _RoutingClient extends http.BaseClient {
         }
         return response;
       } catch (e) {
-        if (!_isConnectionProblem(e) || !canRetry) rethrow;
+        if (!_isConnectionProblem(e)) rethrow;
         if (via == null) {
           _route._reportDirect(failed: true);
         } else {
           _route._proxyFailed(via);
         }
+        if (!canRetry) rethrow;
       }
     }
     throw StateError('no route to server');
