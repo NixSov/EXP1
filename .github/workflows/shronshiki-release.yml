@@ -235,7 +235,7 @@ jobs:
           commit_message: "Shronshiki site, build ${{ github.run_number }}"
 
   release:
-    needs: [windows, android]
+    needs: [windows, android, web]
     if: needs.android.outputs.signed == 'true'
     runs-on: ubuntu-latest
     permissions:
@@ -260,6 +260,16 @@ jobs:
             dist/Shronshiki-Windows/Shronshiki-Setup.exe \
             dist/Shronshiki-Windows/Shronshiki-Windows-portable.zip \
             --target "$GITHUB_SHA" --title "Shronshiki, сборка $build" --notes "$notes" --latest
+          # Publish metadata on a static origin, without unauthenticated API quotas.
+          gh api "repos/$GITHUB_REPOSITORY/releases/tags/$tag" --jq '[{tag_name, draft, prerelease, body, assets: [.assets[] | {name, size}]}]' > "$RUNNER_TEMP/updates.json"
+          gh auth setup-git
+          git clone --depth 1 --branch gh-pages "https://github.com/$GITHUB_REPOSITORY.git" "$RUNNER_TEMP/update-feed"
+          cp "$RUNNER_TEMP/updates.json" "$RUNNER_TEMP/update-feed/updates.json"
+          git -C "$RUNNER_TEMP/update-feed" config user.name "github-actions[bot]"
+          git -C "$RUNNER_TEMP/update-feed" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$RUNNER_TEMP/update-feed" add updates.json
+          git -C "$RUNNER_TEMP/update-feed" commit -m "Update feed for $tag"
+          git -C "$RUNNER_TEMP/update-feed" push origin gh-pages
           # Храним только 5 последних выпусков приложения.
           gh release list --limit 100 --json tagName --jq '.[].tagName' | grep '^shronshiki-b' | sort -t b -k2 -n -r \
             | tail -n +6 | while read -r old; do gh release delete "$old" --cleanup-tag --yes; done
