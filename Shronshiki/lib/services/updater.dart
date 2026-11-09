@@ -43,25 +43,70 @@ class Updater {
   /// Номер этой сборки (задаёт CI). 0 — собрано вручную.
   static const currentBuild = int.fromEnvironment('APP_BUILD');
 
-  static bool get supported => !kIsWeb && (Platform.isAndroid || Platform.isWindows);
+  static bool get supported =>
+      !kIsWeb && (Platform.isAndroid || Platform.isWindows);
 
   /// Найденное при последней проверке обновление (для баннера на главной).
   static final available = ValueNotifier<AppUpdate?>(null);
 
-  static String get _proxy {
-    // Посредник, который сейчас отвечает быстрее всех.
-    final url = AppState.instance.supabaseReady ? '${AppState.instance.route.proxyUrl ?? ''}' : '';
-    return url.endsWith('/') ? url.substring(0, url.length - 1) : url;
+  static List<String> get _proxies {
+    try {
+      final state = AppState.instance;
+      if (!state.supabaseReady) return const [];
+      return {
+            if (state.route.proxyUrl != null) state.route.proxyUrl!,
+            ...state.route.proxies,
+          }
+          .where((url) => !url.path.contains('/macros/s/'))
+          .map((url) => url.toString().replaceAll(RegExp(r'/+$'), ''))
+          .toList();
+    } catch (_) {
+      return const [];
+    }
   }
 
-  /// Сначала напрямую, при ошибке — через посредника.
-  static Future<T> _either<T>(Future<T> Function(String base) direct, Future<T> Function(String base) proxied) async {
+  /// Static feeds avoid GitHub's shared-IP API quota. All routes are read-only.
+  @visibleForTesting
+  static Future<List<dynamic>> loadReleases({
+    Iterable<String> proxies = const [],
+    http.Client? client,
+  }) async {
+    final transport = client ?? http.Client();
     try {
-      return await direct('https://api.github.com/repos/$repo');
-    } catch (e) {
-      if (_proxy.isEmpty) rethrow;
-      debugPrint('github direct failed, via proxy: $e');
-      return proxied('$_proxy/gh');
+      for (final url in {
+        'https://raw.githubusercontent.com/$repo/gh-pages/updates.json',
+        'https://nixsov.github.io/EXP1/updates.json',
+        'https://api.github.com/repos/$repo/releases?per_page=20',
+        for (final proxy in proxies) '$proxy/gh/releases',
+      }) {
+        try {
+          final response = await transport
+              .get(
+                Uri.parse(url),
+                headers: {
+                  'Accept': 'application/json',
+                  'User-Agent': 'Shronshiki-Updater',
+                },
+              )
+              .timeout(const Duration(seconds: 8));
+          if (response.statusCode != 200) continue;
+          final data = jsonDecode(response.body);
+          if (data is List &&
+              data.every(
+                (item) =>
+                    item is Map<String, dynamic> && item['tag_name'] is String,
+              )) {
+            return data;
+          }
+        } catch (e) {
+          debugPrint('update source failed: $url: $e');
+        }
+      }
+      throw const HttpException(
+        'Серверы обновлений временно недоступны. Повторите проверку позже.',
+      );
+    } finally {
+      if (client == null) transport.close();
     }
   }
 
@@ -69,26 +114,19 @@ class Updater {
   static Future<AppUpdate?> check() async {
     if (!supported) return null;
     final fileName = await _fileName();
-    Future<List<dynamic>> load(String url) async {
-      final response = await http
-          .get(Uri.parse(url), headers: {'Accept': 'application/vnd.github+json'})
-          .timeout(const Duration(seconds: 12));
-      if (response.statusCode != 200) {
-        throw HttpException('GitHub ответил ${response.statusCode}');
-      }
-      return jsonDecode(response.body) as List<dynamic>;
-    }
-
-    final releases = await _either(
-      (base) => load('$base/releases?per_page=20'),
-      (base) => load('$base/releases'),
-    );
+    final releases = await loadReleases(proxies: _proxies);
     AppUpdate? best;
     for (final r in releases.cast<Map<String, dynamic>>()) {
       final tag = r['tag_name'] as String? ?? '';
-      if (!tag.startsWith(_tagPrefix) || r['draft'] == true || r['prerelease'] == true) continue;
+      if (!tag.startsWith(_tagPrefix) ||
+          r['draft'] == true ||
+          r['prerelease'] == true) {
+        continue;
+      }
       final build = int.tryParse(tag.substring(_tagPrefix.length)) ?? 0;
-      if (build <= currentBuild || (best != null && build <= best.build)) continue;
+      if (build <= currentBuild || (best != null && build <= best.build)) {
+        continue;
+      }
       final asset = (r['assets'] as List<dynamic>? ?? const [])
           .cast<Map<String, dynamic>>()
           .where((a) => a['name'] == fileName)
@@ -118,32 +156,52 @@ class Updater {
   }
 
   /// Скачивает файл обновления. [onProgress] — доля от 0 до 1.
-  static Future<File> download(AppUpdate update, void Function(double) onProgress) async {
+  static Future<File> download(
+    AppUpdate update,
+    void Function(double) onProgress,
+  ) async {
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}${Platform.pathSeparator}${update.fileName}');
     final path = 'releases/download/${update.tag}/${update.fileName}';
-    try {
-      await _downloadTo('https://github.com/$repo/$path', file, update.size, onProgress);
-    } catch (e) {
-      if (_proxy.isEmpty) rethrow;
-      debugPrint('github download failed, via proxy: $e');
-      onProgress(0);
-      await _downloadTo('$_proxy/gh/download/${update.tag}/${update.fileName}', file, update.size, onProgress);
+    Object? lastError;
+    for (final url in [
+      'https://github.com/$repo/$path',
+      for (final proxy in _proxies)
+        '$proxy/gh/download/${update.tag}/${update.fileName}',
+    ]) {
+      try {
+        onProgress(0);
+        await _downloadTo(url, file, update.size, onProgress);
+        return file;
+      } catch (e) {
+        lastError = e;
+      }
     }
-    return file;
+    throw lastError ?? const HttpException('Не удалось скачать обновление');
   }
 
-  static Future<void> _downloadTo(String url, File file, int size, void Function(double) onProgress) async {
+  static Future<void> _downloadTo(
+    String url,
+    File file,
+    int size,
+    void Function(double) onProgress,
+  ) async {
     final client = http.Client();
     try {
-      final response = await client.send(http.Request('GET', Uri.parse(url))).timeout(const Duration(seconds: 20));
-      if (response.statusCode != 200) throw HttpException('Сервер ответил ${response.statusCode}');
+      final response = await client
+          .send(http.Request('GET', Uri.parse(url)))
+          .timeout(const Duration(seconds: 20));
+      if (response.statusCode != 200) {
+        throw HttpException('Сервер ответил ${response.statusCode}');
+      }
       final total = response.contentLength ?? size;
       final sink = file.openWrite();
       var received = 0;
       try {
         // Если загрузка встала на 30 секунд — считаем, что связь пропала.
-        await for (final chunk in response.stream.timeout(const Duration(seconds: 30))) {
+        await for (final chunk in response.stream.timeout(
+          const Duration(seconds: 30),
+        )) {
           sink.add(chunk);
           received += chunk.length;
           if (total > 0) onProgress(received / total);
@@ -152,7 +210,9 @@ class Updater {
         await sink.close();
       }
       if (size > 0 && received != size) {
-        throw HttpException('Файл скачался не полностью ($received из $size байт)');
+        throw HttpException(
+          'Файл скачался не полностью ($received из $size байт)',
+        );
       }
     } finally {
       client.close();
@@ -167,11 +227,12 @@ class Updater {
       return;
     }
     if (Platform.isWindows) {
-      await Process.start(
-        file.path,
-        ['/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/CLOSEAPPLICATIONS'],
-        mode: ProcessStartMode.detached,
-      );
+      await Process.start(file.path, [
+        '/VERYSILENT',
+        '/SUPPRESSMSGBOXES',
+        '/NORESTART',
+        '/CLOSEAPPLICATIONS',
+      ], mode: ProcessStartMode.detached);
       exit(0);
     }
   }
