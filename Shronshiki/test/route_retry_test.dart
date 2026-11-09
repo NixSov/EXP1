@@ -1,10 +1,49 @@
 import 'dart:io';
+import 'dart:async';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shronshiki/services/server_route.dart';
 
 void main() {
+  test(
+    'a stalled write times out without replay and changes the next route',
+    () async {
+      final hole = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final backup = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      var backupWrites = 0;
+      hole.listen((request) {
+        request.drain<void>();
+      });
+      backup.listen((request) async {
+        if (request.method == 'POST') backupWrites++;
+        request.response.write('ok');
+        await request.response.close();
+      });
+      SharedPreferences.setMockInitialValues({'route_mode': 'proxy'});
+      final route = await ServerRoute.create(
+        supabaseUrl: 'http://localhost:9',
+        proxyUrl:
+            'http://127.0.0.1:${hole.port},http://127.0.0.1:${backup.port}',
+      );
+      final client = route.createClient();
+      addTearDown(() async {
+        client.close();
+        await hole.close(force: true);
+        await backup.close(force: true);
+      });
+      await expectLater(
+        client.post(
+          Uri.parse('http://localhost:9/rest/v1/rpc/chat_send'),
+          body: '{}',
+        ),
+        throwsA(isA<TimeoutException>()),
+      );
+      expect(backupWrites, 0);
+      expect(route.proxyUrl!.port, backup.port);
+    },
+    timeout: const Timeout(Duration(seconds: 40)),
+  );
   test(
     'GET falls back after gateway failure; POST is never replayed',
     () async {

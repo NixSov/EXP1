@@ -266,7 +266,7 @@ class _RoutingClient extends http.BaseClient {
             : _inner.send(attempt ?? (request..persistentConnection = false));
         // Провайдер может не рвать соединение, а «подвешивать» его. Долго не ждём:
         // напрямую — 6 секунд, через посредника — 15, потом пробуем другой путь.
-        if (canRetry) sending = sending.timeout(Duration(seconds: via == null ? 6 : 15));
+        sending = sending.timeout(Duration(seconds: via == null ? 6 : 15));
         final response = await sending;
         if (via != null && _proxyDown(response)) {
           // Посредник не работает (приостановлен за лимиты, ошибка шлюза) — дальше.
