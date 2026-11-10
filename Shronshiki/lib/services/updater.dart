@@ -227,11 +227,18 @@ class Updater {
       return;
     }
     if (Platform.isWindows) {
+      // Replace the running installation, including custom/portable locations.
+      // Otherwise Setup may use a remembered directory while pinned shortcuts
+      // keep launching the unchanged executable from a different directory.
+      final installDir = File(Platform.resolvedExecutable).parent.path;
       await Process.start(file.path, [
-        '/VERYSILENT',
-        '/SUPPRESSMSGBOXES',
+        '/SILENT',
+        '/SP-',
         '/NORESTART',
         '/CLOSEAPPLICATIONS',
+        '/NORESTARTAPPLICATIONS',
+        '/DIR=$installDir',
+        '/LOG',
       ], mode: ProcessStartMode.detached);
       exit(0);
     }
