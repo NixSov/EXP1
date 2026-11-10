@@ -137,9 +137,9 @@ class _FileAttachmentState extends State<FileAttachment> {
       _error = null;
     });
     try {
-      final loading = widget.loadFile != null
+      final Future<dynamic> loading = widget.loadFile != null
           ? widget.loadFile!()
-          : AppState.instance.db.rpc(
+          : AppState.instance.db.rpc<dynamic>(
               'message_file',
               get: true,
               params: {
