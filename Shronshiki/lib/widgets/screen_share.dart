@@ -277,7 +277,9 @@ class _ScreenViewState extends State<ScreenView> {
       return;
     }
     _shown = screen.stream;
-    _renderer.muted = true; // Audio is rendered once by CallController.
+    if (kIsWeb) {
+      _renderer.muted = true; // Only HTML renderers play stream audio.
+    }
     _renderer
         .setSrcObject(stream: screen.stream, trackId: screen.trackId)
         .catchError((Object e) {
