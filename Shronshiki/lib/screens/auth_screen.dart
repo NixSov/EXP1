@@ -12,7 +12,8 @@ class AuthScreen extends StatefulWidget {
   State<AuthScreen> createState() => _AuthScreenState();
 }
 
-class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateMixin {
+class _AuthScreenState extends State<AuthScreen>
+    with SingleTickerProviderStateMixin {
   late final TabController _tabs;
 
   @override
@@ -20,7 +21,11 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
     super.initState();
     // Пришли по ссылке-приглашению — сразу открываем гостевой вход.
     final hasInvite = AppState.instance.pendingJoinCode.value != null;
-    _tabs = TabController(length: 3, vsync: this, initialIndex: hasInvite ? 2 : 0);
+    _tabs = TabController(
+      length: 3,
+      vsync: this,
+      initialIndex: hasInvite ? 2 : 0,
+    );
     AppState.instance.pendingJoinCode.addListener(_onInvite);
   }
 
@@ -42,7 +47,11 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
         title: const Text('Shronshiki'),
         bottom: TabBar(
           controller: _tabs,
-          tabs: const [Tab(text: 'Вход'), Tab(text: 'Регистрация'), Tab(text: 'Гость')],
+          tabs: const [
+            Tab(text: 'Вход'),
+            Tab(text: 'Регистрация'),
+            Tab(text: 'Гость'),
+          ],
         ),
       ),
       body: SafeArea(
@@ -67,7 +76,10 @@ class _FormShell extends StatelessWidget {
         padding: const EdgeInsets.all(24),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: children,
+          ),
         ),
       ),
     );
@@ -76,7 +88,9 @@ class _FormShell extends StatelessWidget {
 
 String? _validateEmail(String? v) {
   final text = (v ?? '').trim();
-  return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(text) ? null : 'Введите почту';
+  return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(text)
+      ? null
+      : 'Введите почту';
 }
 
 String? _validateName(String? v) {
@@ -125,29 +139,37 @@ class _SignInFormState extends State<_SignInForm> {
   Widget build(BuildContext context) {
     return Form(
       key: _form,
-      child: _FormShell(children: [
-        TextFormField(
-          controller: _email,
-          keyboardType: TextInputType.emailAddress,
-          autofillHints: const [AutofillHints.email],
-          decoration: const InputDecoration(labelText: 'Почта', border: OutlineInputBorder()),
-          validator: _validateEmail,
-        ),
-        const SizedBox(height: 12),
-        TextFormField(
-          controller: _password,
-          obscureText: true,
-          autofillHints: const [AutofillHints.password],
-          decoration: const InputDecoration(labelText: 'Пароль', border: OutlineInputBorder()),
-          validator: (v) => (v ?? '').isEmpty ? 'Введите пароль' : null,
-          onFieldSubmitted: (_) => _submit(),
-        ),
-        const SizedBox(height: 20),
-        FilledButton(
-          onPressed: _busy ? null : _submit,
-          child: _busy ? const _Spinner() : const Text('Войти'),
-        ),
-      ]),
+      child: _FormShell(
+        children: [
+          TextFormField(
+            controller: _email,
+            keyboardType: TextInputType.emailAddress,
+            autofillHints: const [AutofillHints.email],
+            decoration: const InputDecoration(
+              labelText: 'Почта',
+              border: OutlineInputBorder(),
+            ),
+            validator: _validateEmail,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _password,
+            obscureText: true,
+            autofillHints: const [AutofillHints.password],
+            decoration: const InputDecoration(
+              labelText: 'Пароль',
+              border: OutlineInputBorder(),
+            ),
+            validator: (v) => (v ?? '').isEmpty ? 'Введите пароль' : null,
+            onFieldSubmitted: (_) => _submit(),
+          ),
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: _busy ? null : _submit,
+            child: _busy ? const _Spinner() : const Text('Войти'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -193,7 +215,10 @@ class _SignUpFormState extends State<_SignUpForm> {
               'Перейдите по ссылке в письме, затем войдите на вкладке «Вход».',
             ),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(context), child: const Text('Понятно')),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Понятно'),
+              ),
             ],
           ),
         );
@@ -209,36 +234,45 @@ class _SignUpFormState extends State<_SignUpForm> {
   Widget build(BuildContext context) {
     return Form(
       key: _form,
-      child: _FormShell(children: [
-        TextFormField(
-          controller: _name,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(labelText: 'Имя', border: OutlineInputBorder()),
-          validator: _validateName,
-        ),
-        const SizedBox(height: 12),
-        TextFormField(
-          controller: _email,
-          keyboardType: TextInputType.emailAddress,
-          decoration: const InputDecoration(labelText: 'Почта', border: OutlineInputBorder()),
-          validator: _validateEmail,
-        ),
-        const SizedBox(height: 12),
-        TextFormField(
-          controller: _password,
-          obscureText: true,
-          decoration: const InputDecoration(
-            labelText: 'Пароль (не меньше 6 символов)',
-            border: OutlineInputBorder(),
+      child: _FormShell(
+        children: [
+          TextFormField(
+            controller: _name,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(
+              labelText: 'Имя',
+              border: OutlineInputBorder(),
+            ),
+            validator: _validateName,
           ),
-          validator: (v) => (v ?? '').length >= 6 ? null : 'Минимум 6 символов',
-        ),
-        const SizedBox(height: 20),
-        FilledButton(
-          onPressed: _busy ? null : _submit,
-          child: _busy ? const _Spinner() : const Text('Зарегистрироваться'),
-        ),
-      ]),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _email,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(
+              labelText: 'Почта',
+              border: OutlineInputBorder(),
+            ),
+            validator: _validateEmail,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _password,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'Пароль (не меньше 6 символов)',
+              border: OutlineInputBorder(),
+            ),
+            validator: (v) =>
+                (v ?? '').length >= 6 ? null : 'Минимум 6 символов',
+          ),
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: _busy ? null : _submit,
+            child: _busy ? const _Spinner() : const Text('Зарегистрироваться'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -297,34 +331,42 @@ class _GuestFormState extends State<_GuestForm> {
   Widget build(BuildContext context) {
     return Form(
       key: _form,
-      child: _FormShell(children: [
-        const Text('Войдите в комнату без регистрации — нужен только код от владельца комнаты.'),
-        const SizedBox(height: 16),
-        TextFormField(
-          controller: _name,
-          textCapitalization: TextCapitalization.words,
-          decoration: const InputDecoration(labelText: 'Ваше имя', border: OutlineInputBorder()),
-          validator: _validateName,
-        ),
-        const SizedBox(height: 12),
-        TextFormField(
-          controller: _code,
-          textCapitalization: TextCapitalization.characters,
-          decoration: const InputDecoration(
-            labelText: 'Код комнаты или ссылка',
-            hintText: 'ABC234',
-            border: OutlineInputBorder(),
+      child: _FormShell(
+        children: [
+          const Text(
+            'Войдите в комнату без регистрации — нужен только код от владельца комнаты.',
           ),
-          validator: (v) =>
-              RoomsRepository.normalizeCode(v ?? '') == null ? 'Код — 6 букв и цифр' : null,
-          onFieldSubmitted: (_) => _submit(),
-        ),
-        const SizedBox(height: 20),
-        FilledButton(
-          onPressed: _busy ? null : _submit,
-          child: _busy ? const _Spinner() : const Text('Войти в комнату'),
-        ),
-      ]),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _name,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(
+              labelText: 'Ваше имя',
+              border: OutlineInputBorder(),
+            ),
+            validator: _validateName,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _code,
+            textCapitalization: TextCapitalization.none,
+            decoration: const InputDecoration(
+              labelText: 'Код комнаты или ссылка',
+              hintText: 'ABC234',
+              border: OutlineInputBorder(),
+            ),
+            validator: (v) => RoomsRepository.normalizeCode(v ?? '') == null
+                ? 'Код — от 1 до 64 символов'
+                : null,
+            onFieldSubmitted: (_) => _submit(),
+          ),
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: _busy ? null : _submit,
+            child: _busy ? const _Spinner() : const Text('Войти в комнату'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -333,6 +375,8 @@ class _Spinner extends StatelessWidget {
   const _Spinner();
 
   @override
-  Widget build(BuildContext context) =>
-      const SizedBox.square(dimension: 20, child: CircularProgressIndicator(strokeWidth: 2));
+  Widget build(BuildContext context) => const SizedBox.square(
+    dimension: 20,
+    child: CircularProgressIndicator(strokeWidth: 2),
+  );
 }

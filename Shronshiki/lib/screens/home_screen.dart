@@ -86,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _join(String input) async {
     final code = RoomsRepository.normalizeCode(input);
     if (code == null) {
-      showError(context, 'Код комнаты — 6 букв и цифр');
+      showError(context, 'Код комнаты — от 1 до 64 символов');
       return;
     }
     if (_joining) return;
@@ -115,8 +115,14 @@ class _HomeScreenState extends State<HomeScreen> {
           title: const Text('Перейти в другую комнату?'),
           content: Text('Вы выйдете из комнаты «${active.room.name}».'),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Перейти')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Отмена'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Перейти'),
+            ),
           ],
         ),
       );
@@ -130,9 +136,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _showCall(CallController call) async {
     _inRoom = true;
     try {
-      await Navigator.of(context).push(MaterialPageRoute<void>(
-        builder: (_) => RoomScreen(call: call),
-      ));
+      await Navigator.of(
+        context,
+      ).push(MaterialPageRoute<void>(builder: (_) => RoomScreen(call: call)));
     } finally {
       _inRoom = false;
     }
@@ -161,15 +167,43 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Future<void> _changeRoomCode(Room room) async {
+    final code = await _askName(
+      title: 'Код комнаты: любые буквы, цифры и знаки',
+      initial: room.code,
+    );
+    if (code == null) return;
+    if (RoomsRepository.normalizeCode(code) == null) {
+      if (mounted) {
+        showError(context, 'Введите от 1 до 64 символов без переносов строк');
+      }
+      return;
+    }
+    try {
+      await _app.rooms.setCode(room.id, code);
+      await _loadRooms();
+    } catch (e) {
+      if (mounted) showError(context, describeError(e));
+    }
+  }
+
   Future<void> _deleteRoom(Room room) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Удалить комнату?'),
-        content: Text('«${room.name}» и её код ${room.code} перестанут работать.'),
+        content: Text(
+          '«${room.name}» и её код ${room.code} перестанут работать.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Удалить')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Удалить'),
+          ),
         ],
       ),
     );
@@ -194,7 +228,8 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 8),
             SelectableText(
               room.code,
-              style: Theme.of(context).textTheme.displaySmall?.copyWith(letterSpacing: 6),
+              style: Theme.of(context).textTheme.displaySmall
+                  ?.copyWith(letterSpacing: 6),
             ),
             const SizedBox(height: 8),
             Text(room.webLink, style: Theme.of(context).textTheme.bodySmall),
@@ -209,7 +244,10 @@ class _HomeScreenState extends State<HomeScreen> {
             },
             child: const Text('Скопировать приглашение'),
           ),
-          FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Готово')),
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Готово'),
+          ),
         ],
       ),
     );
@@ -230,13 +268,16 @@ class _HomeScreenState extends State<HomeScreen> {
           content: TextField(
             controller: controller,
             autofocus: true,
-            maxLength: 60,
+            maxLength: title.startsWith('Код комнаты') ? 64 : 60,
             textCapitalization: TextCapitalization.sentences,
             decoration: const InputDecoration(labelText: 'Название'),
             onSubmitted: (_) => submit(),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Отмена'),
+            ),
             FilledButton(onPressed: submit, child: const Text('Сохранить')),
           ],
         );
@@ -254,9 +295,13 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             tooltip: 'Настройки',
             icon: const Icon(Icons.settings_outlined),
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
-            ).then((_) => setState(() {})),
+            onPressed: () => Navigator.of(context)
+                .push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => const SettingsScreen(),
+                  ),
+                )
+                .then((_) => setState(() {})),
           ),
         ],
       ),
@@ -271,13 +316,17 @@ class _HomeScreenState extends State<HomeScreen> {
         onRefresh: () async {
           await Future.wait([
             if (!_isGuest) _loadRooms(),
-            if (_chatsKey.currentState != null) _chatsKey.currentState!.reload(),
+            if (_chatsKey.currentState != null)
+              _chatsKey.currentState!.reload(),
           ]);
         },
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
           children: [
-            Text('Привет, ${user.displayName}!', style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              'Привет, ${user.displayName}!',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 16),
             ActiveCallBanner(onOpen: _showCall),
             const UpdateBanner(),
@@ -287,14 +336,17 @@ class _HomeScreenState extends State<HomeScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Text('Войти по коду', style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      'Войти по коду',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                     const SizedBox(height: 12),
                     Row(
                       children: [
                         Expanded(
                           child: TextField(
                             controller: _code,
-                            textCapitalization: TextCapitalization.characters,
+                            textCapitalization: TextCapitalization.none,
                             decoration: const InputDecoration(
                               hintText: 'Код или ссылка',
                               border: OutlineInputBorder(),
@@ -309,7 +361,9 @@ class _HomeScreenState extends State<HomeScreen> {
                           child: _joining
                               ? const SizedBox.square(
                                   dimension: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
                                 )
                               : const Text('Войти'),
                         ),
@@ -329,27 +383,29 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   List<Widget> _guestInfo(BuildContext context) => [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text('Вы вошли как гость. Чтобы создавать свои комнаты, '
-                    'зарегистрируйтесь.'),
-                const SizedBox(height: 12),
-                OutlinedButton(
-                  onPressed: () async {
-                    await CallSession.leave();
-                    await _app.db.auth.signOut();
-                  },
-                  child: const Text('Войти или зарегистрироваться'),
-                ),
-              ],
+    Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Вы вошли как гость. Чтобы создавать свои комнаты, '
+              'зарегистрируйтесь.',
             ),
-          ),
+            const SizedBox(height: 12),
+            OutlinedButton(
+              onPressed: () async {
+                await CallSession.leave();
+                await _app.db.auth.signOut();
+              },
+              child: const Text('Войти или зарегистрироваться'),
+            ),
+          ],
         ),
-      ];
+      ),
+    ),
+  ];
 
   List<Widget> _roomsList(BuildContext context) {
     final rooms = _rooms;
@@ -360,7 +416,10 @@ class _HomeScreenState extends State<HomeScreen> {
         ListTile(
           leading: const Icon(Icons.error_outline),
           title: Text(_roomsError!),
-          trailing: IconButton(icon: const Icon(Icons.refresh), onPressed: _loadRooms),
+          trailing: IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadRooms,
+          ),
         )
       else if (rooms == null)
         const Padding(
@@ -376,7 +435,9 @@ class _HomeScreenState extends State<HomeScreen> {
         for (final room in rooms)
           Card(
             child: ListTile(
-              leading: const CircleAvatar(child: Icon(Icons.headset_mic_outlined)),
+              leading: const CircleAvatar(
+                child: Icon(Icons.headset_mic_outlined),
+              ),
               title: Text(room.name),
               subtitle: Text('Код: ${room.code}'),
               onTap: () => _openRoom(room),
@@ -387,6 +448,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       _shareRoom(room);
                     case 'rename':
                       _renameRoom(room);
+                    case 'code':
+                      _changeRoomCode(room);
                     case 'delete':
                       _deleteRoom(room);
                   }
@@ -394,6 +457,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 itemBuilder: (_) => const [
                   PopupMenuItem(value: 'share', child: Text('Пригласить')),
                   PopupMenuItem(value: 'rename', child: Text('Переименовать')),
+                  PopupMenuItem(value: 'code', child: Text('Изменить код')),
                   PopupMenuItem(value: 'delete', child: Text('Удалить')),
                 ],
               ),

@@ -22,11 +22,21 @@ class AdminScreen extends StatelessWidget {
           bottom: const TabBar(
             isScrollable: true,
             tabAlignment: TabAlignment.start,
-            tabs: [Tab(text: 'Комнаты'), Tab(text: 'Чаты'), Tab(text: 'Аккаунты'), Tab(text: 'Гости')],
+            tabs: [
+              Tab(text: 'Комнаты'),
+              Tab(text: 'Чаты'),
+              Tab(text: 'Аккаунты'),
+              Tab(text: 'Гости'),
+            ],
           ),
         ),
         body: const TabBarView(
-          children: [_RoomsTab(), _ChatsTab(), _UsersTab(guests: false), _UsersTab(guests: true)],
+          children: [
+            _RoomsTab(),
+            _ChatsTab(),
+            _UsersTab(guests: false),
+            _UsersTab(guests: true),
+          ],
         ),
       ),
     );
@@ -36,7 +46,11 @@ class AdminScreen extends StatelessWidget {
 AdminRepository get _repo => AdminRepository(AppState.instance.db);
 
 /// Выполняет действие и показывает ошибку или [done].
-Future<bool> _run(BuildContext context, Future<void> Function() action, String done) async {
+Future<bool> _run(
+  BuildContext context,
+  Future<void> Function() action,
+  String done,
+) async {
   try {
     await action();
     if (context.mounted) showError(context, done);
@@ -65,28 +79,51 @@ Future<String?> _ask(
         controller: text,
         autofocus: true,
         obscureText: secret,
-        textCapitalization: upper ? TextCapitalization.characters : TextCapitalization.sentences,
-        decoration: InputDecoration(labelText: label, helperText: hint, helperMaxLines: 3, border: const OutlineInputBorder()),
+        textCapitalization: upper
+            ? TextCapitalization.characters
+            : TextCapitalization.sentences,
+        decoration: InputDecoration(
+          labelText: label,
+          helperText: hint,
+          helperMaxLines: 3,
+          border: const OutlineInputBorder(),
+        ),
         onSubmitted: (v) => Navigator.pop(context, v),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
-        FilledButton(onPressed: () => Navigator.pop(context, text.text), child: const Text('Готово')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, text.text),
+          child: const Text('Готово'),
+        ),
       ],
     ),
   );
 }
 
-Future<bool> _confirm(BuildContext context, String title, String text, {String action = 'Удалить'}) async {
+Future<bool> _confirm(
+  BuildContext context,
+  String title,
+  String text, {
+  String action = 'Удалить',
+}) async {
   final ok = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
       title: Text(title),
       content: Text(text),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Отмена')),
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Отмена'),
+        ),
         FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+          style: FilledButton.styleFrom(
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
           onPressed: () => Navigator.pop(context, true),
           child: Text(action),
         ),
@@ -97,14 +134,24 @@ Future<bool> _confirm(BuildContext context, String title, String text, {String a
 }
 
 /// Сменить код комнаты или ключ чата: вручную или случайный.
-Future<String?> _askCode(BuildContext context, String what, String current) async {
+Future<String?> _askCode(
+  BuildContext context,
+  String what,
+  String current,
+) async {
   final choice = await showDialog<String>(
     context: context,
     builder: (context) => SimpleDialog(
       title: Text('Сменить $what ($current)'),
       children: [
-        SimpleDialogOption(onPressed: () => Navigator.pop(context, 'random'), child: const Text('Новый случайный')),
-        SimpleDialogOption(onPressed: () => Navigator.pop(context, 'manual'), child: const Text('Вписать свой')),
+        SimpleDialogOption(
+          onPressed: () => Navigator.pop(context, 'random'),
+          child: const Text('Новый случайный'),
+        ),
+        SimpleDialogOption(
+          onPressed: () => Navigator.pop(context, 'manual'),
+          child: const Text('Вписать свой'),
+        ),
       ],
     ),
   );
@@ -113,11 +160,13 @@ Future<String?> _askCode(BuildContext context, String what, String current) asyn
   final code = await _ask(
     context,
     title: 'Новый $what',
-    label: '6 символов',
-    upper: true,
-    hint: 'Латинские буквы без I и O, цифры 2–9',
+    label: what == 'код' ? 'От 1 до 64 символов' : '6 символов',
+    upper: what != 'код',
+    hint: what == 'код'
+        ? 'Любые буквы, цифры и знаки'
+        : 'Латинские буквы без I и O, цифры 2–9',
   );
-  final v = code?.trim().toUpperCase();
+  final v = what == 'код' ? code?.trim() : code?.trim().toUpperCase();
   return v == null || v.isEmpty ? null : v;
 }
 
@@ -128,7 +177,8 @@ String _date(DateTime? d) {
 }
 
 /// Общая заготовка вкладки: загрузка, поиск, обновление потягиванием.
-abstract class _ListTabState<W extends StatefulWidget, T> extends State<W> with AutomaticKeepAliveClientMixin {
+abstract class _ListTabState<W extends StatefulWidget, T> extends State<W>
+    with AutomaticKeepAliveClientMixin {
   List<T>? _items;
   String? _error;
   String _query = '';
@@ -184,13 +234,25 @@ abstract class _ListTabState<W extends StatefulWidget, T> extends State<W> with 
           ?header(context),
           const SizedBox(height: 8),
           if (_error != null)
-            Padding(padding: const EdgeInsets.all(16), child: Text(_error!, textAlign: TextAlign.center))
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(_error!, textAlign: TextAlign.center),
+            )
           else if (shown == null)
-            const Padding(padding: EdgeInsets.all(32), child: Center(child: CircularProgressIndicator()))
+            const Padding(
+              padding: EdgeInsets.all(32),
+              child: Center(child: CircularProgressIndicator()),
+            )
           else if (shown.isEmpty)
-            const Padding(padding: EdgeInsets.all(32), child: Center(child: Text('Пусто')))
+            const Padding(
+              padding: EdgeInsets.all(32),
+              child: Center(child: Text('Пусто')),
+            )
           else ...[
-            Text('Всего: ${shown.length}', style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              'Всего: ${shown.length}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
             for (final item in shown) tile(context, item),
           ],
         ],
@@ -212,50 +274,94 @@ class _RoomsTabState extends _ListTabState<_RoomsTab, AdminRoom> {
 
   @override
   bool matches(AdminRoom r, String q) =>
-      '${r.name} ${r.code} ${r.owner} ${r.ownerEmail ?? ''}'.toLowerCase().contains(q);
+      '${r.name} ${r.code} ${r.owner} ${r.ownerEmail ?? ''}'
+          .toLowerCase()
+          .contains(q);
 
   @override
   Widget tile(BuildContext context, AdminRoom r) => Card(
-        child: ListTile(
-          leading: const CircleAvatar(child: Icon(Icons.headphones)),
-          title: Text(r.name),
-          subtitle: Text('Код ${r.code} · владелец ${r.owner}${r.online > 0 ? ' · сейчас в комнате: ${r.online}' : ''}'),
-          onTap: () => _actions(r),
-        ),
-      );
+    child: ListTile(
+      leading: const CircleAvatar(child: Icon(Icons.headphones)),
+      title: Text(r.name),
+      subtitle: Text(
+        'Код ${r.code} · владелец ${r.owner}${r.online > 0 ? ' · сейчас в комнате: ${r.online}' : ''}',
+      ),
+      onTap: () => _actions(r),
+    ),
+  );
 
   Future<void> _actions(AdminRoom r) async {
     final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          ListTile(title: Text(r.name), subtitle: Text('Код ${r.code} · ${r.ownerEmail ?? r.owner}')),
-          ListTile(leading: const Icon(Icons.edit), title: const Text('Переименовать'), onTap: () => Navigator.pop(context, 'rename')),
-          ListTile(leading: const Icon(Icons.pin), title: const Text('Сменить код'), onTap: () => Navigator.pop(context, 'code')),
-          ListTile(
-            leading: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
-            title: const Text('Удалить комнату'),
-            onTap: () => Navigator.pop(context, 'delete'),
-          ),
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(r.name),
+              subtitle: Text('Код ${r.code} · ${r.ownerEmail ?? r.owner}'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('Переименовать'),
+              onTap: () => Navigator.pop(context, 'rename'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.pin),
+              title: const Text('Сменить код'),
+              onTap: () => Navigator.pop(context, 'code'),
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.delete_outline,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              title: const Text('Удалить комнату'),
+              onTap: () => Navigator.pop(context, 'delete'),
+            ),
+          ],
+        ),
       ),
     );
     if (!mounted || action == null) return;
     var changed = false;
     switch (action) {
       case 'rename':
-        final name = await _ask(context, title: 'Название комнаты', label: 'Название', initial: r.name);
+        final name = await _ask(
+          context,
+          title: 'Название комнаты',
+          label: 'Название',
+          initial: r.name,
+        );
         if (name != null && name.trim().isNotEmpty && mounted) {
-          changed = await _run(context, () => _repo.updateRoom(r.id, name: name), 'Переименовано');
+          changed = await _run(
+            context,
+            () => _repo.updateRoom(r.id, name: name),
+            'Переименовано',
+          );
         }
       case 'code':
         final code = await _askCode(context, 'код', r.code);
-        if (code != null && mounted) changed = await _run(context, () => _repo.updateRoom(r.id, code: code), 'Код изменён');
+        if (code != null && mounted) {
+          changed = await _run(
+            context,
+            () => _repo.updateRoom(r.id, code: code),
+            'Код изменён',
+          );
+        }
       case 'delete':
-        if (await _confirm(context, 'Удалить «${r.name}»?', 'Комната исчезнет у владельца, войти по коду будет нельзя.') &&
+        if (await _confirm(
+              context,
+              'Удалить «${r.name}»?',
+              'Комната исчезнет у владельца, войти по коду будет нельзя.',
+            ) &&
             mounted) {
-          changed = await _run(context, () => _repo.deleteRoom(r.id), 'Комната удалена');
+          changed = await _run(
+            context,
+            () => _repo.deleteRoom(r.id),
+            'Комната удалена',
+          );
         }
     }
     if (changed) unawaited(reload());
@@ -274,53 +380,103 @@ class _ChatsTabState extends _ListTabState<_ChatsTab, AdminChat> {
   Future<List<AdminChat>> load() => _repo.chats();
 
   @override
-  bool matches(AdminChat c, String q) => '${c.name} ${c.code} ${c.owner}'.toLowerCase().contains(q);
+  bool matches(AdminChat c, String q) =>
+      '${c.name} ${c.code} ${c.owner}'.toLowerCase().contains(q);
 
   @override
   Widget tile(BuildContext context, AdminChat c) => Card(
-        child: ListTile(
-          leading: const CircleAvatar(child: Icon(Icons.forum_outlined)),
-          title: Text(c.name),
-          subtitle: Text('Ключ ${c.code} · участников ${c.members} · сообщений ${c.messages}'),
-          onTap: () => _actions(c),
-        ),
-      );
+    child: ListTile(
+      leading: const CircleAvatar(child: Icon(Icons.forum_outlined)),
+      title: Text(c.name),
+      subtitle: Text(
+        'Ключ ${c.code} · участников ${c.members} · сообщений ${c.messages}',
+      ),
+      onTap: () => _actions(c),
+    ),
+  );
 
   Future<void> _actions(AdminChat c) async {
     final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          ListTile(title: Text(c.name), subtitle: Text('Ключ ${c.code} · создал ${c.owner}')),
-          ListTile(leading: const Icon(Icons.visibility_outlined), title: const Text('Читать переписку'), onTap: () => Navigator.pop(context, 'read')),
-          ListTile(leading: const Icon(Icons.edit), title: const Text('Переименовать'), onTap: () => Navigator.pop(context, 'rename')),
-          ListTile(leading: const Icon(Icons.key), title: const Text('Сменить ключ'), onTap: () => Navigator.pop(context, 'code')),
-          ListTile(
-            leading: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
-            title: const Text('Удалить чат'),
-            onTap: () => Navigator.pop(context, 'delete'),
-          ),
-        ]),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              title: Text(c.name),
+              subtitle: Text('Ключ ${c.code} · создал ${c.owner}'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.visibility_outlined),
+              title: const Text('Читать переписку'),
+              onTap: () => Navigator.pop(context, 'read'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit),
+              title: const Text('Переименовать'),
+              onTap: () => Navigator.pop(context, 'rename'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.key),
+              title: const Text('Сменить ключ'),
+              onTap: () => Navigator.pop(context, 'code'),
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.delete_outline,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              title: const Text('Удалить чат'),
+              onTap: () => Navigator.pop(context, 'delete'),
+            ),
+          ],
+        ),
       ),
     );
     if (!mounted || action == null) return;
     var changed = false;
     switch (action) {
       case 'read':
-        await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => _AdminChatView(chat: c)));
+        await Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (_) => _AdminChatView(chat: c)),
+        );
         changed = true;
       case 'rename':
-        final name = await _ask(context, title: 'Название чата', label: 'Название', initial: c.name);
+        final name = await _ask(
+          context,
+          title: 'Название чата',
+          label: 'Название',
+          initial: c.name,
+        );
         if (name != null && name.trim().isNotEmpty && mounted) {
-          changed = await _run(context, () => _repo.updateChat(c.id, name: name), 'Переименовано');
+          changed = await _run(
+            context,
+            () => _repo.updateChat(c.id, name: name),
+            'Переименовано',
+          );
         }
       case 'code':
         final code = await _askCode(context, 'ключ', c.code);
-        if (code != null && mounted) changed = await _run(context, () => _repo.updateChat(c.id, code: code), 'Ключ изменён');
+        if (code != null && mounted) {
+          changed = await _run(
+            context,
+            () => _repo.updateChat(c.id, code: code),
+            'Ключ изменён',
+          );
+        }
       case 'delete':
-        if (await _confirm(context, 'Удалить «${c.name}»?', 'Вся переписка удалится у всех участников.') && mounted) {
-          changed = await _run(context, () => _repo.deleteChat(c.id), 'Чат удалён');
+        if (await _confirm(
+              context,
+              'Удалить «${c.name}»?',
+              'Вся переписка удалится у всех участников.',
+            ) &&
+            mounted) {
+          changed = await _run(
+            context,
+            () => _repo.deleteChat(c.id),
+            'Чат удалён',
+          );
         }
     }
     if (changed) unawaited(reload());
@@ -351,7 +507,10 @@ class _AdminChatViewState extends State<_AdminChatView> {
 
   Future<void> _load({bool older = false}) async {
     try {
-      final batch = await _repo.chatMessages(widget.chat.id, before: older && _messages.isNotEmpty ? _messages.first.id : null);
+      final batch = await _repo.chatMessages(
+        widget.chat.id,
+        before: older && _messages.isNotEmpty ? _messages.first.id : null,
+      );
       if (!mounted) return;
       setState(() {
         if (older) {
@@ -371,49 +530,71 @@ class _AdminChatViewState extends State<_AdminChatView> {
   }
 
   Future<void> _delete(PersistentMessage m) async {
-    if (!await _confirm(context, 'Удалить сообщение?', '${m.name}: ${m.body}')) return;
+    if (!await _confirm(context, 'Удалить сообщение?', '${m.name}: ${m.body}')) {
+      return;
+    }
     if (!mounted) return;
-    if (await _run(context, () => _repo.deleteMessage(m.id), 'Сообщение удалено')) unawaited(_load());
+    if (await _run(
+      context,
+      () => _repo.deleteMessage(m.id),
+      'Сообщение удалено',
+    )) {
+      unawaited(_load());
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(widget.chat.name),
-          Text('Только чтение · удерживайте сообщение, чтобы удалить', style: Theme.of(context).textTheme.bodySmall),
-        ]),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(widget.chat.name),
+            Text(
+              'Только чтение · удерживайте сообщение, чтобы удалить',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
       ),
       body: _error != null
-          ? Center(child: Padding(padding: const EdgeInsets.all(24), child: Text(_error!)))
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(_error!),
+              ),
+            )
           : _loading
-              ? const Center(child: CircularProgressIndicator())
-              : _messages.isEmpty
-                  ? const Center(child: Text('Сообщений нет'))
-                  : ListView.builder(
-                      reverse: true,
-                      padding: const EdgeInsets.all(12),
-                      itemCount: _messages.length + (_noOlder ? 0 : 1),
-                      itemBuilder: (context, i) {
-                        if (i == _messages.length) {
-                          return TextButton(onPressed: () => _load(older: true), child: const Text('Показать раньше'));
-                        }
-                        final index = _messages.length - 1 - i;
-                        final m = _messages[index];
-                        final previous = index > 0 ? _messages[index - 1] : null;
-                        return GestureDetector(
-                          onLongPress: () => _delete(m),
-                          child: ChatBubble(
-                            name: m.name,
-                            body: m.body,
-                            at: m.at,
-                            mine: false,
-                            showName: previous == null || previous.userId != m.userId,
-                          ),
-                        );
-                      },
-                    ),
+          ? const Center(child: CircularProgressIndicator())
+          : _messages.isEmpty
+          ? const Center(child: Text('Сообщений нет'))
+          : ListView.builder(
+              reverse: true,
+              padding: const EdgeInsets.all(12),
+              itemCount: _messages.length + (_noOlder ? 0 : 1),
+              itemBuilder: (context, i) {
+                if (i == _messages.length) {
+                  return TextButton(
+                    onPressed: () => _load(older: true),
+                    child: const Text('Показать раньше'),
+                  );
+                }
+                final index = _messages.length - 1 - i;
+                final m = _messages[index];
+                final previous = index > 0 ? _messages[index - 1] : null;
+                return GestureDetector(
+                  onLongPress: () => _delete(m),
+                  child: ChatBubble(
+                    name: m.name,
+                    body: m.body,
+                    at: m.at,
+                    mine: false,
+                    showName: previous == null || previous.userId != m.userId,
+                  ),
+                );
+              },
+            ),
     );
   }
 }
@@ -432,7 +613,8 @@ class _UsersTabState extends _ListTabState<_UsersTab, AdminUser> {
   Future<List<AdminUser>> load() => _repo.users(guests: widget.guests);
 
   @override
-  bool matches(AdminUser u, String q) => '${u.name} ${u.email ?? ''}'.toLowerCase().contains(q);
+  bool matches(AdminUser u, String q) =>
+      '${u.name} ${u.email ?? ''}'.toLowerCase().contains(q);
 
   @override
   Widget? header(BuildContext context) => widget.guests
@@ -447,8 +629,11 @@ class _UsersTabState extends _ListTabState<_UsersTab, AdminUser> {
       : null;
 
   Future<void> _cleanGuests() async {
-    if (!await _confirm(context, 'Удалить старых гостей?',
-        'Гостевые аккаунты, не заходившие больше 30 дней, удалятся. Их сообщения в чатах останутся.')) {
+    if (!await _confirm(
+      context,
+      'Удалить старых гостей?',
+      'Гостевые аккаунты, не заходившие больше 30 дней, удалятся. Их сообщения в чатах останутся.',
+    )) {
       return;
     }
     try {
@@ -465,13 +650,23 @@ class _UsersTabState extends _ListTabState<_UsersTab, AdminUser> {
     final me = AppState.instance.db.auth.currentUser?.id == u.id;
     return Card(
       child: ListTile(
-        leading: CircleAvatar(child: Icon(u.admin ? Icons.shield_outlined : (u.guest ? Icons.person_outline : Icons.person))),
-        title: Text('${u.name}${me ? ' (вы)' : ''}${u.admin ? ' · админ' : ''}'),
-        subtitle: Text([
-          if (u.email != null) u.email!,
-          'вход: ${_date(u.lastSignIn ?? u.created)}',
-          if (u.rooms > 0) 'комнат: ${u.rooms}',
-        ].join(' · ')),
+        leading: CircleAvatar(
+          child: Icon(
+            u.admin
+                ? Icons.shield_outlined
+                : (u.guest ? Icons.person_outline : Icons.person),
+          ),
+        ),
+        title: Text(
+          '${u.name}${me ? ' (вы)' : ''}${u.admin ? ' · админ' : ''}',
+        ),
+        subtitle: Text(
+          [
+            if (u.email != null) u.email!,
+            'вход: ${_date(u.lastSignIn ?? u.created)}',
+            if (u.rooms > 0) 'комнат: ${u.rooms}',
+          ].join(' · '),
+        ),
         onTap: () => _actions(u, me),
       ),
     );
@@ -482,36 +677,67 @@ class _UsersTabState extends _ListTabState<_UsersTab, AdminUser> {
       context: context,
       showDragHandle: true,
       builder: (context) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          ListTile(
-            title: Text(u.name),
-            subtitle: Text('${u.email ?? 'гость'} · зарегистрирован ${_date(u.created)}'),
-          ),
-          ListTile(leading: const Icon(Icons.edit), title: const Text('Сменить имя'), onTap: () => Navigator.pop(context, 'rename')),
-          if (!u.guest)
-            ListTile(leading: const Icon(Icons.password), title: const Text('Задать новый пароль'), onTap: () => Navigator.pop(context, 'password')),
-          if (!u.guest && !me)
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
             ListTile(
-              leading: Icon(u.admin ? Icons.remove_moderator_outlined : Icons.add_moderator_outlined),
-              title: Text(u.admin ? 'Забрать права админа' : 'Сделать админом'),
-              onTap: () => Navigator.pop(context, 'admin'),
+              title: Text(u.name),
+              subtitle: Text(
+                '${u.email ?? 'гость'} · зарегистрирован ${_date(u.created)}',
+              ),
             ),
-          if (!me)
             ListTile(
-              leading: Icon(Icons.delete_outline, color: Theme.of(context).colorScheme.error),
-              title: const Text('Удалить аккаунт'),
-              onTap: () => Navigator.pop(context, 'delete'),
+              leading: const Icon(Icons.edit),
+              title: const Text('Сменить имя'),
+              onTap: () => Navigator.pop(context, 'rename'),
             ),
-        ]),
+            if (!u.guest)
+              ListTile(
+                leading: const Icon(Icons.password),
+                title: const Text('Задать новый пароль'),
+                onTap: () => Navigator.pop(context, 'password'),
+              ),
+            if (!u.guest && !me)
+              ListTile(
+                leading: Icon(
+                  u.admin
+                      ? Icons.remove_moderator_outlined
+                      : Icons.add_moderator_outlined,
+                ),
+                title: Text(
+                  u.admin ? 'Забрать права админа' : 'Сделать админом',
+                ),
+                onTap: () => Navigator.pop(context, 'admin'),
+              ),
+            if (!me)
+              ListTile(
+                leading: Icon(
+                  Icons.delete_outline,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                title: const Text('Удалить аккаунт'),
+                onTap: () => Navigator.pop(context, 'delete'),
+              ),
+          ],
+        ),
       ),
     );
     if (!mounted || action == null) return;
     var changed = false;
     switch (action) {
       case 'rename':
-        final name = await _ask(context, title: 'Имя пользователя', label: 'Имя', initial: u.name);
+        final name = await _ask(
+          context,
+          title: 'Имя пользователя',
+          label: 'Имя',
+          initial: u.name,
+        );
         if (name != null && name.trim().isNotEmpty && mounted) {
-          changed = await _run(context, () => _repo.renameUser(u.id, name), 'Имя изменено');
+          changed = await _run(
+            context,
+            () => _repo.renameUser(u.id, name),
+            'Имя изменено',
+          );
         }
       case 'password':
         final password = await _ask(
@@ -521,10 +747,18 @@ class _UsersTabState extends _ListTabState<_UsersTab, AdminUser> {
           hint: 'Не меньше 6 символов. Сообщите его пользователю — старый перестанет подходить.',
         );
         if (password != null && password.isNotEmpty && mounted) {
-          changed = await _run(context, () => _repo.setPassword(u.id, password), 'Пароль изменён');
+          changed = await _run(
+            context,
+            () => _repo.setPassword(u.id, password),
+            'Пароль изменён',
+          );
         }
       case 'admin':
-        changed = await _run(context, () => _repo.setAdmin(u.id, !u.admin), u.admin ? 'Права забраны' : 'Теперь админ');
+        changed = await _run(
+          context,
+          () => _repo.setAdmin(u.id, !u.admin),
+          u.admin ? 'Права забраны' : 'Теперь админ',
+        );
       case 'delete':
         if (await _confirm(
               context,
@@ -533,7 +767,11 @@ class _UsersTabState extends _ListTabState<_UsersTab, AdminUser> {
                   'Отменить нельзя.',
             ) &&
             mounted) {
-          changed = await _run(context, () => _repo.deleteUser(u.id), 'Аккаунт удалён');
+          changed = await _run(
+            context,
+            () => _repo.deleteUser(u.id),
+            'Аккаунт удалён',
+          );
         }
     }
     if (changed) unawaited(reload());

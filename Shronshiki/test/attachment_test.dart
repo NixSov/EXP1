@@ -5,13 +5,13 @@ import 'package:shronshiki/services/signaling.dart';
 import 'package:shronshiki/widgets/chat_bubble.dart';
 
 void main() {
-  const metadata = {'name': 'photo.png', 'mime': 'image/png', 'size': 1024};
+  const metadata = {'name': 'notes.txt', 'mime': 'text/plain', 'size': 1024};
   final raw = {
     'id': 7,
     'peer_id': 'peer0001',
     'user_id': 'u',
     'name': 'A',
-    'body': 'photo.png',
+    'body': 'notes.txt',
     'at': 0,
     'attachment': metadata,
   };
@@ -31,7 +31,7 @@ void main() {
           home: Scaffold(
             body: ChatBubble(
               name: 'A',
-              body: 'photo.png',
+              body: 'notes.txt',
               at: DateTime(2026),
               mine: false,
               showName: true,
@@ -42,8 +42,8 @@ void main() {
           ),
         ),
       );
-      expect(find.text('Сохранить файл'), findsOneWidget);
-      expect(find.text('photo.png · 1 КБ'), findsOneWidget);
+      expect(find.text('notes.txt'), findsOneWidget);
+      expect(find.text('notes.txt · 1 КБ'), findsOneWidget);
       expect(tester.takeException(), isNull);
     },
   );

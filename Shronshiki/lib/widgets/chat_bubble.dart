@@ -73,18 +73,21 @@ class ChatBubble extends StatelessWidget {
                     ),
                   if (attachment != null && messageId != null)
                     FileAttachment(
+                      key: ValueKey('$roomFile:$messageId'),
                       metadata: attachment!,
                       message: messageId!,
                       room: roomFile,
                     ),
-                  LinkedText(
-                    body,
-                    style: TextStyle(
-                      color: mine ? scheme.onPrimary : scheme.onSurface,
+                  if (attachment == null ||
+                      !FileAttachment.isImage(attachment!))
+                    LinkedText(
+                      body,
+                      style: TextStyle(
+                        color: mine ? scheme.onPrimary : scheme.onSurface,
+                      ),
+                      // На своём (цветном) пузыре ссылка — цветом текста, на чужом — цветом темы.
+                      linkColor: mine ? scheme.onPrimary : scheme.primary,
                     ),
-                    // На своём (цветном) пузыре ссылка — цветом текста, на чужом — цветом темы.
-                    linkColor: mine ? scheme.onPrimary : scheme.primary,
-                  ),
                   const SizedBox(height: 2),
                   Text(
                     time,

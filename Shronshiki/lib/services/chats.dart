@@ -35,7 +35,8 @@ class PersistentChat {
     );
   }
 
-  String get inviteText => 'Заходи в чат «$name» в Shronshiki.\n'
+  String get inviteText =>
+      'Заходи в чат «$name» в Shronshiki.\n'
       'Ключ чата: $code\n'
       '(Главный экран → «Вход в чат»)';
 }
@@ -58,17 +59,30 @@ class PersistentMessage {
   final DateTime at;
   final Map<String, dynamic>? attachment;
 
-  factory PersistentMessage.fromMap(Map<String, dynamic> m) => PersistentMessage(
-        attachment: m['attachment'] == null ? null : Map<String, dynamic>.from(m['attachment'] as Map),
+  factory PersistentMessage.fromMap(Map<String, dynamic> m) =>
+      PersistentMessage(
+        attachment: m['attachment'] == null
+            ? null
+            : Map<String, dynamic>.from(m['attachment'] as Map),
         id: (m['id'] as num).toInt(),
         userId: m['user_id'] as String?,
         name: m['name'] as String? ?? 'Участник',
         body: m['body'] as String? ?? '',
-        at: DateTime.fromMillisecondsSinceEpoch((m['at'] as num?)?.toInt() ?? 0),
+        at: DateTime.fromMillisecondsSinceEpoch(
+          (m['at'] as num?)?.toInt() ?? 0,
+        ),
       );
 }
 
 class ChatsRepository {
+  static String? normalizeCode(String input) {
+    final code = input.trim().toUpperCase().replaceAll(
+      RegExp(r'[^A-Z0-9]'),
+      '',
+    );
+    return code.length == 6 ? code : null;
+  }
+
   ChatsRepository(this._db);
 
   final SupabaseClient _db;
@@ -76,7 +90,10 @@ class ChatsRepository {
 
   Future<List<PersistentChat>> myChats() async {
     final raw = await _db.rpc('my_chats').timeout(_timeout);
-    return [for (final m in raw as List) PersistentChat.fromMap(Map<String, dynamic>.from(m as Map))];
+    return [
+      for (final m in raw as List)
+        PersistentChat.fromMap(Map<String, dynamic>.from(m as Map)),
+    ];
   }
 
   /// Может ли текущий пользователь создавать чаты (только администратор).
@@ -89,28 +106,44 @@ class ChatsRepository {
   }
 
   Future<PersistentChat> create(String name) async {
-    final raw = await _db.rpc('create_chat', params: {'p_name': name}).timeout(_timeout);
+    final raw = await _db
+        .rpc('create_chat', params: {'p_name': name})
+        .timeout(_timeout);
     return PersistentChat.fromMap(Map<String, dynamic>.from(raw as Map));
   }
 
   /// null — чата с таким ключом нет.
   Future<PersistentChat?> join(String code) async {
-    final raw = await _db.rpc('join_chat', params: {'p_code': code}).timeout(_timeout);
-    return raw == null ? null : PersistentChat.fromMap(Map<String, dynamic>.from(raw as Map));
+    final raw = await _db
+        .rpc('join_chat', params: {'p_code': code})
+        .timeout(_timeout);
+    return raw == null
+        ? null
+        : PersistentChat.fromMap(Map<String, dynamic>.from(raw as Map));
   }
 
   /// Новые сообщения после [after] или, с [before], более старые.
-  Future<List<PersistentMessage>> messages(String chatId, {int after = 0, int? before}) async {
-    final raw = await _db.rpc('chat_poll', params: {
-      'p_chat': chatId,
-      'p_after': after,
-      'p_before': ?before,
-    }).timeout(_timeout);
-    return [for (final m in raw as List) PersistentMessage.fromMap(Map<String, dynamic>.from(m as Map))];
+  Future<List<PersistentMessage>> messages(
+    String chatId, {
+    int after = 0,
+    int? before,
+  }) async {
+    final raw = await _db
+        .rpc(
+          'chat_poll',
+          params: {'p_chat': chatId, 'p_after': after, 'p_before': ?before},
+        )
+        .timeout(_timeout);
+    return [
+      for (final m in raw as List)
+        PersistentMessage.fromMap(Map<String, dynamic>.from(m as Map)),
+    ];
   }
 
   Future<void> send(String chatId, String body) async {
-    await _db.rpc('chat_send', params: {'p_chat': chatId, 'p_body': body}).timeout(_timeout);
+    await _db
+        .rpc('chat_send', params: {'p_chat': chatId, 'p_body': body})
+        .timeout(_timeout);
   }
 
   Future<void> leave(String chatId) async {
