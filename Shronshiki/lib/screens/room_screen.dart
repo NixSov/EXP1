@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_webrtc/flutter_webrtc.dart' show RTCPeerConnectionState;
@@ -21,6 +23,17 @@ class RoomScreen extends StatefulWidget {
 }
 
 class _RoomScreenState extends State<RoomScreen> {
+  bool _pinned = false;
+  bool _pinControls = false;
+  Timer? _pinTimer;
+  void _showPinControls() {
+    _pinTimer?.cancel();
+    setState(() => _pinControls = true);
+    _pinTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _pinControls = false);
+    });
+  }
+
   CallController get _call => widget.call;
 
   @override
@@ -31,6 +44,9 @@ class _RoomScreenState extends State<RoomScreen> {
 
   void _onCallChanged() {
     if (!mounted) return;
+    if (_call.screenSharer == null || _call.screenSharer!.isLocal) {
+      _pinned = false;
+    }
     if (_call.status == CallStatus.ended) {
       // Вышли (в том числе кнопкой в уведомлении) — возвращаемся к списку комнат.
       Navigator.of(context).popUntil((route) => route.isFirst);
@@ -41,6 +57,7 @@ class _RoomScreenState extends State<RoomScreen> {
 
   @override
   void dispose() {
+    _pinTimer?.cancel();
     _call.removeListener(_onCallChanged);
     // Ошибка или «комната заполнена» — звонок больше не нужен.
     CallSession.dismissIfFinished();
@@ -61,41 +78,45 @@ class _RoomScreenState extends State<RoomScreen> {
   Widget build(BuildContext context) {
     final inCall = _call.isActive;
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          tooltip: inCall ? 'К списку комнат (звонок продолжится)' : 'Назад',
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.of(context).maybePop(),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(_call.room.name, overflow: TextOverflow.ellipsis),
-            Text(
-              'Код: ${_call.room.code}',
-              style: Theme.of(context).textTheme.bodySmall,
+      appBar: _pinned && _call.screenSharer != null
+          ? null
+          : AppBar(
+              leading: IconButton(
+                tooltip: inCall
+                    ? 'К списку комнат (звонок продолжится)'
+                    : 'Назад',
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.of(context).maybePop(),
+              ),
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(_call.room.name, overflow: TextOverflow.ellipsis),
+                  Text(
+                    'Код: ${_call.room.code}',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+              actions: [
+                if (_call.status == CallStatus.inRoom)
+                  IconButton(
+                    tooltip: 'Обновить подключение',
+                    icon: const Icon(Icons.sync),
+                    onPressed: _call.reconnect,
+                  ),
+                IconButton(
+                  tooltip: 'Пригласить',
+                  icon: const Icon(Icons.person_add_alt_1_outlined),
+                  onPressed: _copyInvite,
+                ),
+                IconButton(
+                  tooltip: 'Настройки',
+                  icon: const Icon(Icons.settings_outlined),
+                  onPressed: _openSettings,
+                ),
+              ],
             ),
-          ],
-        ),
-        actions: [
-          if (_call.status == CallStatus.inRoom)
-            IconButton(
-              tooltip: 'Обновить подключение',
-              icon: const Icon(Icons.sync),
-              onPressed: _call.reconnect,
-            ),
-          IconButton(
-            tooltip: 'Пригласить',
-            icon: const Icon(Icons.person_add_alt_1_outlined),
-            onPressed: _copyInvite,
-          ),
-          IconButton(
-            tooltip: 'Настройки',
-            icon: const Icon(Icons.settings_outlined),
-            onPressed: _openSettings,
-          ),
-        ],
-      ),
       body: SafeArea(child: _body(context)),
     );
   }
@@ -255,6 +276,41 @@ class _RoomScreenState extends State<RoomScreen> {
     final output = _outputLook;
     final sharer = _call.screenSharer;
     final watching = sharer != null && !sharer.isLocal;
+    final desktop = MediaQuery.sizeOf(context).width >= 800;
+    if (_pinned && watching) {
+      return CallbackShortcuts(
+        bindings: {
+          const SingleActivator(LogicalKeyboardKey.escape): () =>
+              setState(() => _pinned = false),
+        },
+        child: Focus(
+          autofocus: true,
+          child: MouseRegion(
+            onHover: (_) => _showPinControls(),
+            child: GestureDetector(
+              onTap: _showPinControls,
+              onDoubleTap: () => setState(() => _pinned = false),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  ScreenView(call: _call, sharer: sharer, minimal: true),
+                  if (_pinControls)
+                    Positioned(
+                      right: 12,
+                      top: 12,
+                      child: IconButton(
+                        tooltip: 'Открепить (Esc)',
+                        onPressed: () => setState(() => _pinned = false),
+                        icon: const Icon(Icons.push_pin_outlined),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return Column(
       children: [
         if (_call.serverLost)
@@ -300,6 +356,7 @@ class _RoomScreenState extends State<RoomScreen> {
                 key: ValueKey(sharer.peerId),
                 call: _call,
                 sharer: sharer,
+                onPin: () => setState(() => _pinned = true),
               ),
             ),
           ),
@@ -326,17 +383,42 @@ class _RoomScreenState extends State<RoomScreen> {
               ],
             ),
           ),
-          Expanded(
-            child: GridView.count(
-              padding: const EdgeInsets.all(16),
-              crossAxisCount: 2,
-              mainAxisSpacing: 12,
-              crossAxisSpacing: 12,
-              children: [
-                for (final p in participants) _ParticipantTile(participant: p),
-              ],
+          if (desktop)
+            Expanded(
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: SingleChildScrollView(
+                    child: Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        for (final p in participants)
+                          SizedBox(
+                            width: 180,
+                            height: 200,
+                            child: _ParticipantTile(participant: p),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            )
+          else
+            Expanded(
+              child: GridView.count(
+                padding: const EdgeInsets.all(16),
+                crossAxisCount: 2,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                children: [
+                  for (final p in participants)
+                    _ParticipantTile(participant: p),
+                ],
+              ),
             ),
-          ),
         ],
         if (participants.length == 1)
           const Padding(
@@ -347,7 +429,10 @@ class _RoomScreenState extends State<RoomScreen> {
             ),
           ),
         Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 8),
+          padding: EdgeInsets.symmetric(
+            vertical: desktop ? 8 : 20,
+            horizontal: 8,
+          ),
           child: Wrap(
             alignment: WrapAlignment.spaceEvenly,
             spacing: 8,
@@ -566,6 +651,7 @@ class _ControlButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final compact = MediaQuery.sizeOf(context).width >= 800;
     final bg =
         color ?? (active ? scheme.primary : scheme.surfaceContainerHighest);
     final fg = foreground ?? (active ? scheme.onPrimary : scheme.onSurface);
@@ -583,15 +669,15 @@ class _ControlButton extends StatelessWidget {
                 onTap: onPressed,
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(
-                    16,
-                    16,
-                    onMore == null ? 16 : 8,
-                    16,
+                    compact ? 10 : 16,
+                    compact ? 10 : 16,
+                    onMore == null ? (compact ? 10 : 16) : 8,
+                    compact ? 10 : 16,
                   ),
                   child: Badge(
                     isLabelVisible: badge > 0,
                     label: Text('$badge'),
-                    child: Icon(icon, size: 28, color: fg),
+                    child: Icon(icon, size: compact ? 20 : 28, color: fg),
                   ),
                 ),
               ),
@@ -599,7 +685,12 @@ class _ControlButton extends StatelessWidget {
                 InkWell(
                   onTap: onMore,
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(0, 16, 10, 16),
+                    padding: EdgeInsets.fromLTRB(
+                      0,
+                      compact ? 10 : 16,
+                      10,
+                      compact ? 10 : 16,
+                    ),
                     child: Icon(Icons.keyboard_arrow_up, size: 22, color: fg),
                   ),
                 ),

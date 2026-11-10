@@ -1,7 +1,10 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Адрес сайта Shronshiki (GitHub Pages).
-const webAppUrl = String.fromEnvironment('WEB_URL', defaultValue: 'https://nixsov.github.io/EXP1/');
+const webAppUrl = String.fromEnvironment(
+  'WEB_URL',
+  defaultValue: 'https://nixsov.github.io/EXP1/',
+);
 
 class Room {
   Room({
@@ -19,19 +22,20 @@ class Room {
   final String? ownerName;
 
   factory Room.fromMap(Map<String, dynamic> m) => Room(
-        id: m['id'] as String,
-        name: m['name'] as String,
-        code: m['code'] as String,
-        maxParticipants: (m['max_participants'] as num?)?.toInt() ?? 4,
-        ownerName: m['owner_name'] as String?,
-      );
+    id: m['id'] as String,
+    name: m['name'] as String,
+    code: m['code'] as String,
+    maxParticipants: (m['max_participants'] as num?)?.toInt() ?? 4,
+    ownerName: m['owner_name'] as String?,
+  );
 
-  String get inviteLink => 'shronshiki://join/$code';
+  String get inviteLink => 'shronshiki://join/${Uri.encodeComponent(code)}';
 
   /// Вход через браузер, без установки (в том числе с iPhone).
-  String get webLink => '$webAppUrl#/join/$code';
+  String get webLink => '$webAppUrl#/join/${Uri.encodeComponent(code)}';
 
-  String get inviteText => 'Заходи в голосовую комнату «$name» в Shronshiki.\n'
+  String get inviteText =>
+      'Заходи в голосовую комнату «$name» в Shronshiki.\n'
       'Код: $code\n'
       'В браузере: $webLink\n'
       'В приложении: $inviteLink';
@@ -46,16 +50,33 @@ class RoomsRepository {
   /// На медленном соединении запрос не должен висеть бесконечно.
   static const _timeout = Duration(seconds: 20);
 
-  static const codeLength = 6;
+  static const codeLength = 64;
 
-  /// Приводит введённый код или ссылку к виду ABC234.
-  static String? normalizeCode(String input) {
-    var text = input.trim().toUpperCase();
-    final match = RegExp(r'JOIN/([A-Z0-9]+)').firstMatch(text);
-    if (match != null) text = match.group(1)!;
-    text = text.replaceAll(RegExp(r'[^A-Z0-9]'), '');
-    return text.length == codeLength ? text : null;
+  /// Preserve Unicode and punctuation. Only link segments are URL-decoded.
+  static String? normalizeCode(String input, {bool linkOnly = false}) {
+    var text = input.trim();
+    final link = RegExp(
+      r'(?:shronshiki://join/|https?://[^\s]+?/\#/join/)([^\s]+)',
+      caseSensitive: false,
+    ).firstMatch(text);
+    if (linkOnly && link == null) return null;
+    if (link != null) {
+      try {
+        text = Uri.decodeComponent(link.group(1)!);
+      } catch (_) {
+        return null;
+      }
+    }
+    if (text.isEmpty ||
+        text.runes.length > codeLength ||
+        RegExp(r'[\x00-\x1f\x7f]').hasMatch(text)) {
+      return null;
+    }
+    return text;
   }
+
+  Future<void> setCode(String id, String code) =>
+      _db.from('rooms').update({'code': code.trim()}).eq('id', id);
 
   Future<List<Room>> myRooms() async {
     final uid = _db.auth.currentUser?.id;
@@ -70,7 +91,9 @@ class RoomsRepository {
   }
 
   Future<Room> create(String name) async {
-    final row = await _db.rpc('create_room', params: {'p_name': name.trim()}).timeout(_timeout);
+    final row = await _db
+        .rpc('create_room', params: {'p_name': name.trim()})
+        .timeout(_timeout);
     return Room.fromMap(Map<String, dynamic>.from(row as Map));
   }
 
@@ -80,7 +103,9 @@ class RoomsRepository {
   Future<void> delete(String id) => _db.from('rooms').delete().eq('id', id);
 
   Future<Room?> findByCode(String code) async {
-    final rows = await _db.rpc('find_room', params: {'p_code': code}).timeout(_timeout) as List;
+    final rows =
+        await _db.rpc('find_room', params: {'p_code': code}).timeout(_timeout)
+            as List;
     if (rows.isEmpty) return null;
     return Room.fromMap(Map<String, dynamic>.from(rows.first as Map));
   }

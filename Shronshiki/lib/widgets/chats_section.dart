@@ -8,7 +8,6 @@ import '../app_state.dart';
 import '../screens/chat_screen.dart';
 import '../screens/errors.dart';
 import '../services/chats.dart';
-import '../services/rooms.dart';
 
 /// Главный экран: кнопка «Вход в чат» и постоянные чаты, в которые я вошёл.
 class ChatsSection extends StatefulWidget {
@@ -52,7 +51,8 @@ class ChatsSectionState extends State<ChatsSection> {
   }
 
   Future<void> _open(PersistentChat chat) async {
-    await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => ChatScreen(chat: chat)));
+    await Navigator.of(context)
+        .push(MaterialPageRoute<void>(builder: (_) => ChatScreen(chat: chat)));
     // Вернулись — обновим непрочитанные (или чат исчез, если из него вышли).
     unawaited(reload());
   }
@@ -79,7 +79,9 @@ class ChatsSectionState extends State<ChatsSection> {
           onPressed: _enter,
           icon: const Icon(Icons.forum_outlined),
           label: const Text('Вход в чат'),
-          style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+          style: OutlinedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+          ),
         ),
         if (chats.isNotEmpty) ...[
           const SizedBox(height: 16),
@@ -91,11 +93,15 @@ class ChatsSectionState extends State<ChatsSection> {
                 leading: const CircleAvatar(child: Icon(Icons.forum_outlined)),
                 title: Text(c.name, overflow: TextOverflow.ellipsis),
                 subtitle: Text(
-                  c.lastBody == null ? 'Ключ: ${c.code} · участников: ${c.members}' : '${c.lastName}: ${c.lastBody}',
+                  c.lastBody == null
+                      ? 'Ключ: ${c.code} · участников: ${c.members}'
+                      : '${c.lastName}: ${c.lastBody}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                trailing: c.unread > 0 ? Badge(label: Text('${c.unread}')) : null,
+                trailing: c.unread > 0
+                    ? Badge(label: Text('${c.unread}'))
+                    : null,
                 onTap: () => _open(c),
               ),
             ),
@@ -131,7 +137,7 @@ class _EnterChatDialogState extends State<_EnterChatDialog> {
   }
 
   Future<void> _join() async {
-    final code = RoomsRepository.normalizeCode(_code.text);
+    final code = ChatsRepository.normalizeCode(_code.text);
     if (code == null) {
       setState(() => _error = 'Ключ — 6 букв и цифр');
       return;
@@ -170,7 +176,10 @@ class _EnterChatDialogState extends State<_EnterChatDialog> {
       if (!mounted) return;
       await Clipboard.setData(ClipboardData(text: chat.inviteText));
       if (!mounted) return;
-      showError(context, 'Чат создан. Ключ ${chat.code} скопирован — отправьте его друзьям');
+      showError(
+        context,
+        'Чат создан. Ключ ${chat.code} скопирован — отправьте его друзьям',
+      );
       Navigator.pop(context, chat);
     } catch (e) {
       if (mounted) setState(() => _error = describeError(e));
@@ -193,7 +202,10 @@ class _EnterChatDialogState extends State<_EnterChatDialog> {
               autofocus: true,
               maxLength: 60,
               textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(labelText: 'Название чата', border: OutlineInputBorder()),
+              decoration: const InputDecoration(
+                labelText: 'Название чата',
+                border: OutlineInputBorder(),
+              ),
               onSubmitted: (_) => _create(),
             )
           else
@@ -202,31 +214,44 @@ class _EnterChatDialogState extends State<_EnterChatDialog> {
               autofocus: true,
               maxLength: 6,
               textCapitalization: TextCapitalization.characters,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(letterSpacing: 6),
-              decoration: const InputDecoration(labelText: 'Ключ чата', border: OutlineInputBorder()),
+              style: Theme.of(context).textTheme.titleLarge
+                  ?.copyWith(letterSpacing: 6),
+              decoration: const InputDecoration(
+                labelText: 'Ключ чата',
+                border: OutlineInputBorder(),
+              ),
               onSubmitted: (_) => _join(),
             ),
           if (_error != null)
-            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+            Text(
+              _error!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
           const SizedBox(height: 4),
           if (widget.canCreate)
             TextButton(
               onPressed: _busy
                   ? null
                   : () => setState(() {
-                        _creating = !_creating;
-                        _error = null;
-                      }),
+                      _creating = !_creating;
+                      _error = null;
+                    }),
               child: Text(_creating ? 'У меня есть ключ' : 'Создать новый чат'),
             ),
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
         FilledButton(
           onPressed: _busy ? null : (_creating ? _create : _join),
           child: _busy
-              ? const SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2))
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
               : Text(_creating ? 'Создать' : 'Войти'),
         ),
       ],

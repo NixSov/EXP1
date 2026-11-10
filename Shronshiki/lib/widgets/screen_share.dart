@@ -236,10 +236,18 @@ class _SourceTile extends StatelessWidget {
 
 /// Демонстрация экрана другого участника. Нажатие — на весь экран.
 class ScreenView extends StatefulWidget {
-  const ScreenView({super.key, required this.call, required this.sharer});
+  const ScreenView({
+    super.key,
+    required this.call,
+    required this.sharer,
+    this.onPin,
+    this.minimal = false,
+  });
 
   final CallController call;
   final Participant sharer;
+  final VoidCallback? onPin;
+  final bool minimal;
 
   @override
   State<ScreenView> createState() => _ScreenViewState();
@@ -323,7 +331,7 @@ class _ScreenViewState extends State<ScreenView> {
             Positioned.fill(
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
-                onDoubleTap: _openFull,
+                onDoubleTap: widget.minimal ? null : _openFull,
               ),
             ),
             if (!hasPicture)
@@ -337,38 +345,50 @@ class _ScreenViewState extends State<ScreenView> {
                   ),
                 ),
               ),
-            Positioned(
-              left: 8,
-              top: 8,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: Colors.black54,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
+            if (!widget.minimal)
+              Positioned(
+                left: 8,
+                top: 8,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Colors.black54,
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Text(
-                    'Экран: ${widget.sharer.name}',
-                    style: const TextStyle(color: Colors.white),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    child: Text(
+                      'Экран: ${widget.sharer.name}',
+                      style: const TextStyle(color: Colors.white),
+                    ),
                   ),
                 ),
               ),
-            ),
-            Positioned(
-              right: 4,
-              bottom: 4,
-              child: IconButton.filledTonal(
-                tooltip: 'Во весь экран',
-                onPressed: _openFull,
-                icon: const Icon(Icons.fullscreen),
-                style: IconButton.styleFrom(
-                  backgroundColor: scheme.surface.withValues(alpha: 0.7),
+            if (!widget.minimal && widget.onPin != null)
+              Positioned(
+                right: 52,
+                bottom: 4,
+                child: IconButton.filledTonal(
+                  tooltip: 'Закрепить трансляцию',
+                  onPressed: widget.onPin,
+                  icon: const Icon(Icons.push_pin_outlined),
                 ),
               ),
-            ),
+            if (!widget.minimal)
+              Positioned(
+                right: 4,
+                bottom: 4,
+                child: IconButton.filledTonal(
+                  tooltip: 'Во весь экран',
+                  onPressed: _openFull,
+                  icon: const Icon(Icons.fullscreen),
+                  style: IconButton.styleFrom(
+                    backgroundColor: scheme.surface.withValues(alpha: 0.7),
+                  ),
+                ),
+              ),
           ],
         ),
       ),

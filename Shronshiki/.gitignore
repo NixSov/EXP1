@@ -56,3 +56,5 @@ app.*.map.json
 
 # SQL test dependencies
 /test/sql/node_modules/
+
+/supabase/.temp/

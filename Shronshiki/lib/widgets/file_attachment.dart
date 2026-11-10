@@ -93,8 +93,21 @@ class FileAttachment extends StatefulWidget {
     required this.metadata,
     required this.message,
     required this.room,
+    this.loadFile,
   });
+  static bool isImage(Map<String, dynamic> metadata) =>
+      const [
+        'image/png',
+        'image/jpeg',
+        'image/gif',
+        'image/webp',
+      ].contains(metadata['mime']) ||
+      RegExp(
+        r'\.(png|jpe?g|gif|webp)$',
+        caseSensitive: false,
+      ).hasMatch('${metadata['name']}');
   final Map<String, dynamic> metadata;
+  final Future<Map<String, dynamic>> Function()? loadFile;
   final int message;
   final bool room;
   @override
@@ -104,30 +117,40 @@ class FileAttachment extends StatefulWidget {
 class _FileAttachmentState extends State<FileAttachment> {
   bool _busy = false;
   Uint8List? _image;
+  String? _error;
+  @override
+  void initState() {
+    super.initState();
+    if (FileAttachment.isImage(widget.metadata)) {
+      Future.microtask(() {
+        if (mounted) _open();
+      });
+    }
+  }
+
   Future<void> _open({bool save = false}) async {
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     try {
-      final raw = await AppState.instance.db.rpc(
-        'message_file',
-        params: {
-          'p_message': widget.message,
-          'p_room': widget.room,
-          'p_content': true,
-        },
-      );
+      final raw = widget.loadFile != null
+          ? await widget.loadFile!()
+          : await AppState.instance.db.rpc(
+              'message_file',
+              params: {
+                'p_message': widget.message,
+                'p_room': widget.room,
+                'p_content': true,
+              },
+            );
       if (raw == null) throw Exception('Файл удалён');
       final file = Map<String, dynamic>.from(raw as Map);
       final bytes = base64Decode(
         (file['data'] as String).replaceAll(RegExp(r'\s'), ''),
       );
       if (!mounted) return;
-      if (!save &&
-          const [
-            'image/png',
-            'image/jpeg',
-            'image/gif',
-            'image/webp',
-          ].contains(file['mime'])) {
+      if (!save && FileAttachment.isImage(widget.metadata)) {
         setState(() => _image = bytes);
       } else {
         await FileSaver.instance.saveAs(
@@ -139,41 +162,77 @@ class _FileAttachmentState extends State<FileAttachment> {
         );
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Не удалось открыть файл: $e')));
-      }
+      if (mounted) setState(() => _error = 'Не удалось загрузить вложение');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   @override
-  Widget build(BuildContext context) => Column(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      if (_image != null)
-        Image.memory(
-          _image!,
+  Widget build(BuildContext context) {
+    if (FileAttachment.isImage(widget.metadata)) {
+      if (_image == null) {
+        return SizedBox(
+          width: 260,
           height: 180,
-          fit: BoxFit.contain,
-          errorBuilder: (_, error, stack) =>
-              const Text('Изображение повреждено'),
+          child: Center(
+            child: _error != null
+                ? IconButton(
+                    tooltip: 'Повторить загрузку изображения',
+                    onPressed: _busy ? null : _open,
+                    icon: const Icon(Icons.refresh),
+                  )
+                : const CircularProgressIndicator(),
+          ),
+        );
+      }
+      return GestureDetector(
+        onTap: () => showDialog<void>(
+          context: context,
+          builder: (context) => Dialog(
+            child: Stack(
+              children: [
+                InteractiveViewer(child: Image.memory(_image!)),
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  child: IconButton(
+                    tooltip: 'Закрыть',
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
-      TextButton(
-        onPressed: _busy ? null : () => _open(save: true),
-        child: const Text('Сохранить файл'),
-      ),
-      TextButton.icon(
-        onPressed: _busy ? null : _open,
-        icon: const Icon(Icons.download),
-        label: Text(
-          _busy
-              ? 'Загрузка…'
-              : '${widget.metadata['name']} · ${((widget.metadata['size'] as num) / 1024).ceil()} КБ',
+        onLongPress: () => _open(save: true),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Image.memory(
+            _image!,
+            height: 220,
+            fit: BoxFit.contain,
+            errorBuilder: (_, error, stack) =>
+                const Text('Изображение повреждено'),
+          ),
         ),
-      ),
-    ],
-  );
+      );
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_error != null) Text(_error!),
+        TextButton.icon(
+          onPressed: _busy ? null : () => _open(save: true),
+          icon: const Icon(Icons.download),
+          label: Text(
+            _busy
+                ? 'Загрузка…'
+                : '${widget.metadata['name']} · ${((widget.metadata['size'] as num) / 1024).ceil()} КБ',
+          ),
+        ),
+      ],
+    );
+  }
 }

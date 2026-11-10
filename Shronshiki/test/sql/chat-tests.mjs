@@ -23,13 +23,32 @@ const uid=async(x)=>db.query(`select set_config('test.uid',$1,false)`,[x]);
 assert.equal(await scalar('select count(*)::int from public.app_admins'),0);
 await uid(a);
 const room=await scalar(`select (public.create_room('test')).id`);
+const legacyCode=await scalar('select code from public.rooms where id=$1',[room]);
+assert.equal((await db.query('select * from public.find_room($1)',[legacyCode.toLowerCase()])).rows[0].id,room);
+for (const invalid of ['', 'a'.repeat(65), 'a\nb']) {
+ await assert.rejects(db.query('update public.rooms set code=$1 where id=$2',[invalid,room]),/rooms_code_check/);
+}
+await db.query('update public.rooms set code=$1 where id=$2',['🔒'.repeat(64),room]);
+const unicodeCode='Схрон №1 /#?% +猫🔒';
+await db.query('update public.rooms set code=$1 where id=$2',[unicodeCode,room]);
+assert.equal((await db.query('select * from public.find_room($1)',[unicodeCode])).rows[0].id,room);
+await uid('');
+assert.equal((await db.query('select * from public.find_room($1)',[unicodeCode])).rows.length,0);
+await uid(b);
+await db.exec('grant usage on schema public,auth to authenticated; set role authenticated');
+assert.equal((await db.query('update public.rooms set code=$1 where id=$2 returning id',['stolen',room])).rows.length,0);
+await db.exec('reset role');
+await uid(a);
+await db.query('insert into public.app_admins values($1)',[a]);
+await db.query('select public.admin_room_update($1,null,$2)',[room,unicodeCode]);
+
 await db.query(`select public.room_poll($1,'peer0001','A',false,1,0,0)`,[room]);
 await db.query(`insert into public.room_signals(room_id,from_peer,to_peer,payload) values($1,'other','peer0001','{}')`,[room]);
 await uid(b);
 await assert.rejects(db.query(`select public.room_leave($1,'peer0001')`,[room]),/not your peer/);
 assert.equal(await scalar(`select count(*)::int from public.room_signals`),1);
 await uid(a);
-await db.query(`insert into public.app_admins values($1)`,[a]);
+await db.query(`insert into public.app_admins values($1) on conflict do nothing`,[a]);
 const chat=(await scalar(`select public.create_chat('test')`)).id;
 await db.query(`insert into public.chat_messages(chat_id,user_id,name,body) select $1,$2,'A',i::text from generate_series(1,160) i`,[chat,a]);
 let page=await scalar(`select public.chat_poll($1,10)`,[chat]);
@@ -55,5 +74,5 @@ assert.equal(await scalar('select count(*)::int from public.message_files where 
 await db.exec('grant usage on schema public,auth to authenticated; set role authenticated');
 await assert.rejects(db.query('select data from public.message_files'), /permission denied/);
 await db.exec('reset role');
-console.log('PASS: admin bootstrap, unauthorized leave, pagination, read cursor, private files, last-peer cascade cleanup');
+console.log('PASS: Unicode room codes, legacy lookup, validation, owner permissions, admin bootstrap, unauthorized leave, pagination, read cursor, private files, last-peer cascade cleanup');
 await db.close();

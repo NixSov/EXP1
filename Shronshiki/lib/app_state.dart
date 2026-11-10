@@ -47,7 +47,10 @@ class AppState {
 
   Future<void> initSupabase() async {
     if (supabaseReady) return;
-    route = await ServerRoute.create(supabaseUrl: config.supabaseUrl, proxyUrl: config.proxyUrl);
+    route = await ServerRoute.create(
+      supabaseUrl: config.supabaseUrl,
+      proxyUrl: config.proxyUrl,
+    );
     // Меряем оба пути в фоне; первые запросы при необходимости сами уйдут через посредника.
     unawaited(route.probe(force: true));
     await Supabase.initialize(
@@ -65,12 +68,18 @@ class AppState {
   void _listenLinks() {
     if (kIsWeb) {
       // Сайт открыли по приглашению …/#/join/КОД — сразу в комнату.
-      pendingJoinCode.value = RoomsRepository.normalizeCode(Uri.base.toString());
+      pendingJoinCode.value = RoomsRepository.normalizeCode(
+        Uri.base.toString(),
+        linkOnly: true,
+      );
       return;
     }
     try {
       AppLinks().uriLinkStream.listen((uri) {
-        final code = RoomsRepository.normalizeCode(uri.toString());
+        final code = RoomsRepository.normalizeCode(
+          uri.toString(),
+          linkOnly: true,
+        );
         if (code != null) pendingJoinCode.value = code;
       }, onError: (_) {});
     } catch (_) {
