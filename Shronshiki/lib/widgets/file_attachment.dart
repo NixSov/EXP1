@@ -94,6 +94,7 @@ class FileAttachment extends StatefulWidget {
     required this.message,
     required this.room,
     this.loadFile,
+    this.foreground,
   });
   static bool isImage(Map<String, dynamic> metadata) =>
       const [
@@ -108,6 +109,7 @@ class FileAttachment extends StatefulWidget {
       ).hasMatch('${metadata['name']}');
   final Map<String, dynamic> metadata;
   final Future<Map<String, dynamic>> Function()? loadFile;
+  final Color? foreground;
   final int message;
   final bool room;
   @override
@@ -129,21 +131,25 @@ class _FileAttachmentState extends State<FileAttachment> {
   }
 
   Future<void> _open({bool save = false}) async {
+    if (_busy) return;
     setState(() {
       _busy = true;
       _error = null;
     });
     try {
-      final raw = widget.loadFile != null
-          ? await widget.loadFile!()
-          : await AppState.instance.db.rpc(
+      final loading = widget.loadFile != null
+          ? widget.loadFile!()
+          : AppState.instance.db.rpc(
               'message_file',
+              get: true,
               params: {
                 'p_message': widget.message,
                 'p_room': widget.room,
                 'p_content': true,
               },
             );
+      // Bound the entire download, not just receipt of HTTP headers.
+      final raw = await loading.timeout(const Duration(seconds: 30));
       if (raw == null) throw Exception('Файл удалён');
       final file = Map<String, dynamic>.from(raw as Map);
       final bytes = base64Decode(
@@ -177,12 +183,22 @@ class _FileAttachmentState extends State<FileAttachment> {
           height: 180,
           child: Center(
             child: _error != null
-                ? IconButton(
-                    tooltip: 'Повторить загрузку изображения',
-                    onPressed: _busy ? null : _open,
-                    icon: const Icon(Icons.refresh),
+                ? Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Не удалось загрузить фото',
+                        style: TextStyle(color: widget.foreground),
+                      ),
+                      IconButton(
+                        tooltip: 'Повторить загрузку изображения',
+                        onPressed: _busy ? null : _open,
+                        icon: const Icon(Icons.refresh),
+                        color: widget.foreground,
+                      ),
+                    ],
                   )
-                : const CircularProgressIndicator(),
+                : CircularProgressIndicator(color: widget.foreground),
           ),
         );
       }
@@ -212,9 +228,12 @@ class _FileAttachmentState extends State<FileAttachment> {
           child: Image.memory(
             _image!,
             height: 220,
+            cacheWidth: 1600,
             fit: BoxFit.contain,
-            errorBuilder: (_, error, stack) =>
-                const Text('Изображение повреждено'),
+            errorBuilder: (_, error, stack) => Text(
+              'Изображение повреждено',
+              style: TextStyle(color: widget.foreground),
+            ),
           ),
         ),
       );
