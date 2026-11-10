@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -25,22 +26,28 @@ class ThemeSettings extends ChangeNotifier {
   static const defaultText = Color(0xFFF2F3F5);
 
   final SharedPreferences _prefs;
+  bool _pickingImage = false;
 
   static Future<ThemeSettings> load() async =>
       ThemeSettings._(await SharedPreferences.getInstance());
 
   AppThemeMode get mode =>
-      AppThemeMode.values.asNameMap()[_prefs.getString(_kMode)] ?? AppThemeMode.dark;
-  set mode(AppThemeMode value) => _save(() => _prefs.setString(_kMode, value.name));
+      AppThemeMode.values.asNameMap()[_prefs.getString(_kMode)] ??
+      AppThemeMode.dark;
+  set mode(AppThemeMode value) =>
+      _save(() => _prefs.setString(_kMode, value.name));
 
-  Color get background => Color(_prefs.getInt(_kBackground) ?? defaultBackground.toARGB32());
-  set background(Color value) => _save(() => _prefs.setInt(_kBackground, value.toARGB32()));
+  Color get background =>
+      Color(_prefs.getInt(_kBackground) ?? defaultBackground.toARGB32());
+  set background(Color value) =>
+      _save(() => _prefs.setInt(_kBackground, value.toARGB32()));
 
   Color get text => Color(_prefs.getInt(_kText) ?? defaultText.toARGB32());
   set text(Color value) => _save(() => _prefs.setInt(_kText, value.toARGB32()));
 
   Color get accent => Color(_prefs.getInt(_kAccent) ?? defaultSeed.toARGB32());
-  set accent(Color value) => _save(() => _prefs.setInt(_kAccent, value.toARGB32()));
+  set accent(Color value) =>
+      _save(() => _prefs.setInt(_kAccent, value.toARGB32()));
 
   /// Затемнение картинки фона (0 — нет, 0.8 — почти чёрная), чтобы текст читался.
   double get imageDim => _prefs.getDouble(_kDim) ?? 0.4;
@@ -51,7 +58,7 @@ class ThemeSettings extends ChangeNotifier {
     // В браузере файлов нет — только цвет.
     if (kIsWeb) return null;
     final path = _prefs.getString(_kImage);
-    return path != null && File(path).existsSync() ? path : null;
+    return path;
   }
 
   bool get hasImage => mode == AppThemeMode.custom && imagePath != null;
@@ -63,26 +70,49 @@ class ThemeSettings extends ChangeNotifier {
 
   /// Выбор картинки из галереи. Возвращает false, если пользователь передумал.
   Future<bool> pickImage() async {
-    final picked = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-      maxWidth: 2400,
-      maxHeight: 2400,
-      imageQuality: 90,
-    );
-    if (picked == null) return false;
-    final dir = await getApplicationDocumentsDirectory();
-    final ext = picked.path.contains('.') ? picked.path.split('.').last : 'jpg';
-    final target = File('${dir.path}/theme_background_${DateTime.now().millisecondsSinceEpoch}.$ext');
-    await File(picked.path).copy(target.path);
-    final old = _prefs.getString(_kImage);
-    await _prefs.setString(_kImage, target.path);
-    if (old != null) {
-      try {
-        await File(old).delete();
-      } catch (_) {}
+    if (_pickingImage) return false;
+    _pickingImage = true;
+    try {
+      String? pickedPath;
+      if (!kIsWeb && Platform.isWindows) {
+        // file_selector's platform-thread dialog can hang the entire window.
+        // FilePickerWindows opens its native dialog on a separate isolate.
+        final picked = await FilePicker.platform.pickFiles(
+          dialogTitle: 'Выберите фотографию для фона',
+          type: FileType.custom,
+          allowedExtensions: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp'],
+          withData: false,
+          lockParentWindow: false,
+        );
+        pickedPath = picked?.files.single.path;
+      } else {
+        final picked = await ImagePicker().pickImage(
+          source: ImageSource.gallery,
+          maxWidth: 2400,
+          maxHeight: 2400,
+          imageQuality: 90,
+        );
+        pickedPath = picked?.path;
+      }
+      if (pickedPath == null) return false;
+      final dir = await getApplicationDocumentsDirectory();
+      final ext = pickedPath.contains('.') ? pickedPath.split('.').last : 'jpg';
+      final target = File(
+        '${dir.path}/theme_background_${DateTime.now().millisecondsSinceEpoch}.$ext',
+      );
+      await File(pickedPath).copy(target.path);
+      final old = _prefs.getString(_kImage);
+      await _prefs.setString(_kImage, target.path);
+      if (old != null) {
+        try {
+          await File(old).delete();
+        } catch (_) {}
+      }
+      notifyListeners();
+      return true;
+    } finally {
+      _pickingImage = false;
     }
-    notifyListeners();
-    return true;
   }
 
   Future<void> removeImage() async {
@@ -105,16 +135,19 @@ class ThemeSettings extends ChangeNotifier {
   }
 
   ThemeData get themeData => switch (mode) {
-        AppThemeMode.light => ThemeData(
-            colorScheme: ColorScheme.fromSeed(seedColor: defaultSeed),
-            useMaterial3: true,
-          ),
-        AppThemeMode.dark => ThemeData(
-            colorScheme: ColorScheme.fromSeed(seedColor: defaultSeed, brightness: Brightness.dark),
-            useMaterial3: true,
-          ),
-        AppThemeMode.custom => _customTheme(),
-      };
+    AppThemeMode.light => ThemeData(
+      colorScheme: ColorScheme.fromSeed(seedColor: defaultSeed),
+      useMaterial3: true,
+    ),
+    AppThemeMode.dark => ThemeData(
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: defaultSeed,
+        brightness: Brightness.dark,
+      ),
+      useMaterial3: true,
+    ),
+    AppThemeMode.custom => _customTheme(),
+  };
 
   static Color _contrastOn(Color c) =>
       c.computeLuminance() > 0.45 ? Colors.black : Colors.white;
@@ -157,8 +190,11 @@ class ThemeSettings extends ChangeNotifier {
       outlineVariant: fg.withValues(alpha: 0.2),
     );
     final opaquePanel = panel(0.08);
-    final textTheme = (dark ? Typography.material2021().white : Typography.material2021().black)
-        .apply(bodyColor: fg, displayColor: fg);
+    final textTheme =
+        (dark
+                ? Typography.material2021().white
+                : Typography.material2021().black)
+            .apply(bodyColor: fg, displayColor: fg);
 
     return ThemeData(
       useMaterial3: true,
@@ -194,7 +230,13 @@ class ThemeSettings extends ChangeNotifier {
     return Stack(
       fit: StackFit.expand,
       children: [
-        Image.file(File(path), fit: BoxFit.cover, gaplessPlayback: true),
+        Image.file(
+          File(path),
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          cacheWidth: 2400,
+          errorBuilder: (_, error, stack) => ColoredBox(color: background),
+        ),
         ColoredBox(color: Colors.black.withValues(alpha: imageDim)),
         child,
       ],

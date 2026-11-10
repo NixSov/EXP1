@@ -77,6 +77,7 @@ class ChatBubble extends StatelessWidget {
                       metadata: attachment!,
                       message: messageId!,
                       room: roomFile,
+                      foreground: mine ? scheme.onPrimary : scheme.onSurface,
                     ),
                   if (attachment == null ||
                       !FileAttachment.isImage(attachment!))
