@@ -18,7 +18,7 @@ void main() {
         return http.Response(
           '[]',
           200,
-          headers: {'content-type': 'application/json'},
+          request: request, headers: {'content-type': 'application/json'},
         );
       }),
       authOptions: const AuthClientOptions(autoRefreshToken: false),
