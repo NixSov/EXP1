@@ -299,10 +299,14 @@ class _RoomScreenState extends State<RoomScreen> {
                       _call.setParticipantVolume(participant.peerId, v),
                 ),
                 if (participant.sharingScreen) ...[
-                  const Text('Громкость трансляции для вас'),
+                  Text(
+                    'Громкость трансляции для вас: '
+                    '${(_call.screenVolume * 100).round()}%',
+                  ),
                   Slider(
                     value: _call.screenVolume,
-                    divisions: 100,
+                    max: _call.maxScreenVolume,
+                    divisions: (_call.maxScreenVolume * 100).round(),
                     label: '${(_call.screenVolume * 100).round()}%',
                     onChanged: _call.setScreenVolume,
                   ),
