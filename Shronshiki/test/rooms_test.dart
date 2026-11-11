@@ -1,8 +1,32 @@
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shronshiki/config.dart';
 import 'package:shronshiki/services/rooms.dart';
 
 void main() {
+  test('recent rooms GET sends an empty parameter map to the SDK', () async {
+    var requests = 0;
+    final db = SupabaseClient(
+      'https://example.supabase.co',
+      'key',
+      httpClient: MockClient((request) async {
+        requests++;
+        expect(request.method, 'GET');
+        expect(request.url.path, '/rest/v1/rpc/recent_rooms');
+        return http.Response(
+          '[]',
+          200,
+          headers: {'content-type': 'application/json'},
+        );
+      }),
+      authOptions: const AuthClientOptions(autoRefreshToken: false),
+    );
+    expect(await RoomsRepository(db).recentRooms(), isEmpty);
+    expect(requests, 1);
+    await db.dispose();
+  });
   group('RoomsRepository.normalizeCode', () {
     test('принимает код в любом регистре и с пробелами', () {
       expect(RoomsRepository.normalizeCode(' abc234 '), 'abc234');

@@ -85,7 +85,7 @@ class MessageNotices {
       var cursor = prefs.getInt(key);
       if (cursor == null || !app.settings.messageNotifications) {
         final newest = await app.db
-            .rpc('message_notice_cursor', get: true)
+            .rpc('message_notice_cursor', get: true, params: const {})
             .timeout(const Duration(seconds: 15));
         if (generation == _generation) {
           await prefs.setInt(key, (newest as num).toInt());
