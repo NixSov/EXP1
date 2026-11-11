@@ -26,6 +26,13 @@ class AudioSettings extends ChangeNotifier {
     notifyListeners();
   }
 
+  bool get messageNotifications =>
+      _prefs.getBool('message_notifications') ?? true;
+  set messageNotifications(bool value) {
+    _prefs.setBool('message_notifications', value);
+    notifyListeners();
+  }
+
   /// Ограничения getUserMedia для микрофона.
   ///
   /// Стандартные ключи понимают Windows/web, а Android-реализация
@@ -34,7 +41,13 @@ class AudioSettings extends ChangeNotifier {
     final ns = noiseSuppression;
     // Браузер понимает только стандартные ключи: старые mandatory/optional
     // вместе с ними он отвергает целиком.
-    if (kIsWeb) return {'echoCancellation': true, 'noiseSuppression': ns, 'autoGainControl': true};
+    if (kIsWeb) {
+      return {
+        'echoCancellation': true,
+        'noiseSuppression': ns,
+        'autoGainControl': true,
+      };
+    }
     return {
       'echoCancellation': true,
       'noiseSuppression': ns,

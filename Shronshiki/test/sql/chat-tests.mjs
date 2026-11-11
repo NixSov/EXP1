@@ -2,7 +2,7 @@ import { PGlite } from '@electric-sql/pglite';
 import fs from 'node:fs';
 import assert from 'node:assert/strict';
 const db = new PGlite();
-await db.exec(`create role anon; create role authenticated; create schema auth; create schema realtime; create schema extensions;
+await db.exec(`create role service_role; create role anon; create role authenticated; create schema auth; create schema realtime; create schema extensions;
 create table auth.users(id uuid primary key,email text,is_anonymous boolean default false,raw_user_meta_data jsonb default '{}',created_at timestamptz default now(),last_sign_in_at timestamptz);
 create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('test.uid',true),'')::uuid $$;
 create function auth.jwt() returns jsonb language sql stable as $$ select '{}'::jsonb $$;
@@ -14,7 +14,9 @@ create function extensions.gen_random_bytes(n int) returns bytea language sql as
 const root = new URL('../../supabase/migrations/', import.meta.url);
 const read = name => fs.readFileSync(new URL(name, root), 'utf8');
 for(const name of fs.readdirSync(root).sort()) {
- await db.exec(read(name));
+ let migration=read(name);
+ if(name.includes('push_delivery')) migration=migration.replace(/^create extension.*;$/gm,'').replace(/^select cron.schedule.*;$/gm,'');
+ await db.exec(migration);
 }
 const a='00000000-0000-0000-0000-000000000001', b='00000000-0000-0000-0000-000000000002';
 await db.exec(`insert into auth.users(id,raw_user_meta_data) values ('${a}','{"display_name":"AdmiNix"}'),('${b}','{"display_name":"B"}');`);
@@ -74,5 +76,32 @@ assert.equal(await scalar('select count(*)::int from public.message_files where 
 await db.exec('grant usage on schema public,auth to authenticated; set role authenticated');
 await assert.rejects(db.query('select data from public.message_files'), /permission denied/);
 await db.exec('reset role');
+
+// Pair privacy, repeat joins, history and notification isolation.
+await uid(b);
+await db.query('select public.join_chat($1)',[(await db.query('select code from public.chats where id=$1',[chat])).rows[0].code]);
+await uid(a);
+const direct=await scalar('select public.open_direct($1)',[b]);
+assert.equal(direct.direct,true); assert.equal(Number(direct.members),2);
+assert.equal((await scalar('select public.open_direct($1)',[b])).id,direct.id);
+assert.equal(await scalar('select public.join_chat($1)',[direct.code]),null);
+const third='00000000-0000-0000-0000-000000000003';
+await db.query('insert into auth.users(id) values($1)',[third]);
+await assert.rejects(db.query('insert into public.chat_members(chat_id,user_id) values($1,$2)',[direct.id,third]),/exactly two/);
+await uid(third);
+await assert.rejects(db.query('select public.chat_poll($1)',[direct.id]),/not a member/);
+await assert.rejects(db.query('select public.rejoin_chat($1)',[direct.id]),/not previously joined/);
+assert.equal((await scalar('select public.my_chats()')).length,0);
+await uid(a);
+await db.query('select public.chat_send($1,$2)',[direct.id,'hello']);
+assert.equal((await scalar('select public.message_notifications(0)')).length,0);
+await uid(b);
+const notices=await scalar('select public.message_notifications(0)');
+assert.ok(notices.some(n=>n.chat_id===direct.id));
+await db.query('select public.leave_chat($1)',[direct.id]);
+assert.equal((await scalar('select public.my_chats()')).find(c=>c.id===direct.id).is_member,false);
+assert.equal((await scalar('select public.rejoin_chat($1)',[direct.id])).id,direct.id);
+await uid(a);
+assert.ok((await scalar('select public.recent_rooms()')).some(r=>r.id===room));
 console.log('PASS: Unicode room codes, legacy lookup, validation, owner permissions, admin bootstrap, unauthorized leave, pagination, read cursor, private files, last-peer cascade cleanup');
 await db.close();

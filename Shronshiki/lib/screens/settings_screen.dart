@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../app_state.dart';
 import '../services/background_call.dart';
+import '../services/message_notices.dart';
 import '../services/call_session.dart';
 import '../services/diagnostics.dart';
 import '../services/ice_check.dart';
@@ -57,7 +58,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           textCapitalization: TextCapitalization.words,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Отмена')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Отмена'),
+          ),
           FilledButton(
             onPressed: () => Navigator.pop(context, controller.text.trim()),
             child: const Text('Сохранить'),
@@ -67,23 +71,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ).whenComplete(controller.dispose);
     if (name == null || name.isEmpty) return;
     try {
-      await _app.db.auth.updateUser(UserAttributes(data: {'display_name': name}));
-      await _app.db.from('profiles').update({'display_name': name}).eq('id', user.id);
+      await _app.db.auth.updateUser(
+        UserAttributes(data: {'display_name': name}),
+      );
+      await _app.db
+          .from('profiles')
+          .update({'display_name': name})
+          .eq('id', user.id);
       if (mounted) setState(() {});
     } catch (e) {
       if (mounted) showError(context, describeError(e));
     }
   }
 
-  Future<void> _runDiagnostics() => _runCheck('Проверка связи', Diagnostics.run);
+  Future<void> _runDiagnostics() =>
+      _runCheck('Проверка связи', Diagnostics.run);
 
   Future<void> _runIceCheck() => _runCheck('Прямое соединение', IceCheck.run);
 
-  Future<void> _runPlatformCheck() => _runCheck('Проверка площадок', PlatformCheck.run);
+  Future<void> _runPlatformCheck() =>
+      _runCheck('Проверка площадок', PlatformCheck.run);
 
   Future<void> _runCheck(
     String title,
-    Future<List<DiagResult>> Function(void Function(List<DiagResult>) onProgress) runner,
+    Future<List<DiagResult>> Function(
+      void Function(List<DiagResult>) onProgress,
+    )
+    runner,
   ) async {
     final results = ValueNotifier<List<DiagResult>>([]);
     final done = ValueNotifier(false);
@@ -113,14 +127,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             builder: (context, _) => TextButton(
               onPressed: done.value
                   ? () {
-                      Clipboard.setData(ClipboardData(text: results.value.join('\n')));
+                      Clipboard.setData(
+                        ClipboardData(text: results.value.join('\n')),
+                      );
                       showError(this.context, 'Результат скопирован');
                     }
                   : null,
               child: const Text('Скопировать'),
             ),
           ),
-          FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Закрыть')),
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Закрыть'),
+          ),
         ],
       ),
     );
@@ -133,7 +152,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ListTile(
           leading: Icon(Icons.alt_route),
           title: Text('Подключение к серверу: напрямую'),
-          subtitle: Text('Посредник не настроен (Сервер Supabase → «Посредник»)'),
+          subtitle: Text(
+            'Посредник не настроен (Сервер Supabase → «Посредник»)',
+          ),
         ),
       ];
     }
@@ -167,23 +188,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final theme = _app.theme;
     final custom = theme.mode == AppThemeMode.custom;
     Widget swatch(Color c) => Container(
-          width: 28,
-          height: 28,
-          decoration: BoxDecoration(
-            color: c,
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.grey.withValues(alpha: 0.6)),
-          ),
-        );
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        color: c,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.grey.withValues(alpha: 0.6)),
+      ),
+    );
     return [
       const _Header('Оформление'),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         child: SegmentedButton<AppThemeMode>(
           segments: const [
-            ButtonSegment(value: AppThemeMode.light, icon: Icon(Icons.light_mode), label: Text('Светлая')),
-            ButtonSegment(value: AppThemeMode.dark, icon: Icon(Icons.dark_mode), label: Text('Тёмная')),
-            ButtonSegment(value: AppThemeMode.custom, icon: Icon(Icons.palette), label: Text('Своя')),
+            ButtonSegment(
+              value: AppThemeMode.light,
+              icon: Icon(Icons.light_mode),
+              label: Text('Светлая'),
+            ),
+            ButtonSegment(
+              value: AppThemeMode.dark,
+              icon: Icon(Icons.dark_mode),
+              label: Text('Тёмная'),
+            ),
+            ButtonSegment(
+              value: AppThemeMode.custom,
+              icon: Icon(Icons.palette),
+              label: Text('Своя'),
+            ),
           ],
           selected: {theme.mode},
           onSelectionChanged: (v) => theme.mode = v.first,
@@ -197,12 +230,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
           trailing: theme.imagePath != null
               ? ClipRRect(
                   borderRadius: BorderRadius.circular(6),
-                  child: Image.file(File(theme.imagePath!), width: 40, height: 40, fit: BoxFit.cover),
+                  child: Image.file(
+                    File(theme.imagePath!),
+                    width: 40,
+                    height: 40,
+                    fit: BoxFit.cover,
+                  ),
                 )
               : swatch(theme.background),
           onTap: kIsWeb
               ? () async {
-                  final color = await showColorPickerDialog(context, title: 'Цвет фона', initial: theme.background);
+                  final color = await showColorPickerDialog(
+                    context,
+                    title: 'Цвет фона',
+                    initial: theme.background,
+                  );
                   if (color != null) theme.background = color;
                 }
               : _chooseBackground,
@@ -229,14 +271,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
           leading: const Icon(Icons.text_fields),
           title: const Text('Цвет текста'),
           trailing: swatch(theme.text),
-          onTap: () => _pickColor('Цвет текста', theme.text, (c) => theme.text = c),
+          onTap: () =>
+              _pickColor('Цвет текста', theme.text, (c) => theme.text = c),
         ),
         ListTile(
           leading: const Icon(Icons.color_lens_outlined),
           title: const Text('Вторичный цвет'),
           subtitle: const Text('Кнопки, переключатели, выделение'),
           trailing: swatch(theme.accent),
-          onTap: () => _pickColor('Вторичный цвет', theme.accent, (c) => theme.accent = c),
+          onTap: () => _pickColor(
+            'Вторичный цвет',
+            theme.accent,
+            (c) => theme.accent = c,
+          ),
         ),
         ListTile(
           leading: const Icon(Icons.restart_alt),
@@ -247,8 +294,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ];
   }
 
-  Future<void> _pickColor(String title, Color initial, ValueChanged<Color> apply) async {
-    final color = await showColorPickerDialog(context, title: title, initial: initial);
+  Future<void> _pickColor(
+    String title,
+    Color initial,
+    ValueChanged<Color> apply,
+  ) async {
+    final color = await showColorPickerDialog(
+      context,
+      title: title,
+      initial: initial,
+    );
     if (color != null) apply(color);
   }
 
@@ -265,7 +320,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               leading: const Icon(Icons.format_color_fill),
               title: const Text('Цвет фона'),
               subtitle: theme.imagePath != null
-                  ? const Text('Картинка будет убрана; цвет останется у панелей')
+                  ? const Text(
+                      'Картинка будет убрана; цвет останется у панелей',
+                    )
                   : null,
               onTap: () => Navigator.pop(context, 'color'),
             ),
@@ -287,7 +344,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (!mounted) return;
     switch (action) {
       case 'color':
-        final color = await showColorPickerDialog(context, title: 'Цвет фона', initial: theme.background);
+        final color = await showColorPickerDialog(
+          context,
+          title: 'Цвет фона',
+          initial: theme.background,
+        );
         if (color != null) {
           theme.background = color;
           await theme.removeImage();
@@ -305,7 +366,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _testHeadsetButton() async {
     final presses = ValueNotifier<List<String>>([]);
-    await BackgroundCall.startButtonTest((key) => presses.value = [...presses.value, key]);
+    await BackgroundCall.startButtonTest(
+      (key) => presses.value = [...presses.value, key],
+    );
     if (!mounted) return;
     await showDialog<void>(
       context: context,
@@ -317,31 +380,46 @@ class _SettingsScreenState extends State<SettingsScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(BackgroundCall.supported
-                  ? 'Подключите наушники и один раз нажмите кнопку, которой ставите музыку на паузу.'
-                  : 'Нажмите клавишу Play/Pause на клавиатуре или кнопку на наушниках.'),
+              Text(
+                BackgroundCall.supported
+                    ? 'Подключите наушники и один раз нажмите кнопку, которой ставите музыку на паузу.'
+                    : 'Нажмите клавишу Play/Pause на клавиатуре или кнопку на наушниках.',
+              ),
               const SizedBox(height: 16),
               if (list.isEmpty)
                 const Row(
                   children: [
-                    SizedBox.square(dimension: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                    SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
                     SizedBox(width: 12),
                     Text('Ждём нажатия…'),
                   ],
                 )
               else ...[
-                Text('✅ Нажатие получено (${list.length})',
-                    style: Theme.of(context).textTheme.titleSmall),
+                Text(
+                  '✅ Нажатие получено (${list.length})',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
                 const SizedBox(height: 4),
-                Text('Сигнал: ${list.last}', style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                  'Сигнал: ${list.last}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
                 const SizedBox(height: 8),
-                const Text('Во время звонка это нажатие будет включать и выключать микрофон.'),
+                const Text(
+                  'Во время звонка это нажатие будет включать и выключать микрофон.',
+                ),
               ],
             ],
           ),
         ),
         actions: [
-          FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Закрыть')),
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Закрыть'),
+          ),
         ],
       ),
     );
@@ -380,11 +458,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: const Text('Админ-панель'),
                   subtitle: const Text('Все комнаты, чаты и аккаунты'),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const AdminScreen())),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => const AdminScreen(),
+                    ),
+                  ),
                 ),
               const Divider(),
             ],
             ..._themeSection(context),
+            const Divider(),
+            const _Header('Уведомления'),
+            SwitchListTile(
+              secondary: const Icon(Icons.notifications_outlined),
+              title: const Text('Уведомления о сообщениях'),
+              subtitle: const Text(
+                'Личные, общие чаты и сообщения в вашей комнате',
+              ),
+              value: settings.messageNotifications,
+              onChanged: (v) => settings.messageNotifications = v,
+            ),
+            if (BackgroundCall.supported)
+              ValueListenableBuilder<bool>(
+                valueListenable: MessageNotices.pushReady,
+                builder: (context, ready, _) => Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Text(
+                    ready ? 'Фоновая доставка Android подключена' : 'Пока уведомления приходят только при работающем приложении. Фоновая доставка ещё не подключена.',
+                  ),
+                ),
+              ),
             const Divider(),
             const _Header('Звук'),
             SwitchListTile(
@@ -397,7 +500,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             SwitchListTile(
               secondary: const Icon(Icons.volume_up_outlined),
               title: const Text('Громкая связь по умолчанию'),
-              subtitle: const Text('Иначе звук идёт в наушники или динамик у уха'),
+              subtitle: const Text(
+                'Иначе звук идёт в наушники или динамик у уха',
+              ),
               value: settings.speakerByDefault,
               onChanged: (v) => settings.speakerByDefault = v,
             ),
@@ -406,18 +511,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 leading: const Icon(Icons.battery_saver_outlined),
                 title: const Text('Не ограничивать в фоне'),
                 subtitle: const Text(
-                    'Если звонок обрывается при выключенном экране — отключите для приложения '
-                    'оптимизацию батареи'),
+                  'Если звонок обрывается при выключенном экране — отключите для приложения '
+                  'оптимизацию батареи',
+                ),
                 onTap: BackgroundCall.requestIgnoreBatteryOptimizations,
               ),
             if (BackgroundCall.hasHeadsetButton)
               ListTile(
                 leading: const Icon(Icons.headset_mic_outlined),
                 title: const Text('Проверка кнопки наушников'),
-                subtitle: Text(BackgroundCall.supported
-                    ? 'Во время звонка одно нажатие на наушниках включает и выключает микрофон'
-                    : 'Во время звонка клавиша Play/Pause (или кнопка на наушниках) '
-                        'включает и выключает микрофон'),
+                subtitle: Text(
+                  BackgroundCall.supported
+                      ? 'Во время звонка одно нажатие на наушниках включает и выключает микрофон'
+                      : 'Во время звонка клавиша Play/Pause (или кнопка на наушниках) '
+                            'включает и выключает микрофон',
+                ),
                 onTap: _testHeadsetButton,
               ),
             const Divider(),
@@ -427,20 +535,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ListTile(
                 leading: const Icon(Icons.network_check),
                 title: const Text('Проверить связь с сервером'),
-                subtitle: const Text('Покажет, мешает ли провайдер (сравните с VPN и без)'),
+                subtitle: const Text(
+                  'Покажет, мешает ли провайдер (сравните с VPN и без)',
+                ),
                 onTap: _runDiagnostics,
               ),
             ListTile(
               leading: const Icon(Icons.swap_horiz),
               title: const Text('Проверить прямое соединение'),
-              subtitle: const Text('STUN и TURN: смогут ли телефоны найти друг друга'),
+              subtitle: const Text(
+                'STUN и TURN: смогут ли телефоны найти друг друга',
+              ),
               onTap: _runIceCheck,
             ),
             if (!kIsWeb)
               ListTile(
                 leading: const Icon(Icons.travel_explore),
                 title: const Text('Проверить площадки'),
-                subtitle: const Text('Где можно разместить посредника: что открывается без VPN'),
+                subtitle: const Text(
+                  'Где можно разместить посредника: что открывается без VPN',
+                ),
                 onTap: _runPlatformCheck,
               ),
             ExpansionTile(
@@ -452,7 +566,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   submitLabel: 'Сохранить',
                   onSaved: () async {
                     if (context.mounted) {
-                      showError(context, 'Сохранено. Новый адрес Supabase применится после перезапуска.');
+                      showError(
+                        context,
+                        'Сохранено. Новый адрес Supabase применится после перезапуска.',
+                      );
                     }
                   },
                 ),
@@ -467,7 +584,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
             if (user != null)
               ListTile(
                 leading: const Icon(Icons.logout),
-                title: Text(user.isAnonymous ? 'Выйти из гостевого режима' : 'Выйти из аккаунта'),
+                title: Text(
+                  user.isAnonymous
+                      ? 'Выйти из гостевого режима'
+                      : 'Выйти из аккаунта',
+                ),
                 onTap: _signOut,
               ),
           ],
@@ -484,10 +605,11 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-        child: Text(text,
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: Theme.of(context).colorScheme.primary,
-                )),
-      );
+    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+    child: Text(
+      text,
+      style: Theme.of(context).textTheme.labelLarge
+          ?.copyWith(color: Theme.of(context).colorScheme.primary),
+    ),
+  );
 }

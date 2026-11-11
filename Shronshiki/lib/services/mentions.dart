@@ -21,11 +21,11 @@ class MentionNotice {
   final String roomCode;
 
   factory MentionNotice.fromMap(Map<String, dynamic> m) => MentionNotice(
-        fromName: m['from_name'] as String? ?? 'Кто-то',
-        body: m['body'] as String? ?? '',
-        roomName: m['room_name'] as String? ?? 'комната',
-        roomCode: m['room_code'] as String? ?? '',
-      );
+    fromName: m['from_name'] as String? ?? 'Кто-то',
+    body: m['body'] as String? ?? '',
+    roomName: m['room_name'] as String? ?? 'комната',
+    roomCode: m['room_code'] as String? ?? '',
+  );
 
   String get title => '$fromName упоминает вас в «$roomName»';
 }
@@ -60,10 +60,16 @@ class MentionWatcher {
   }
 
   static Future<void> check() async {
-    if (!_serverSupports || _busy || AppState.instance.db.auth.currentUser == null) return;
+    if (!_serverSupports ||
+        _busy ||
+        AppState.instance.db.auth.currentUser == null) {
+      return;
+    }
     _busy = true;
     try {
-      final raw = await AppState.instance.db.rpc('my_notifications').timeout(const Duration(seconds: 15));
+      final raw = await AppState.instance.db
+          .rpc('my_notifications')
+          .timeout(const Duration(seconds: 15));
       for (final item in (raw as List?) ?? const []) {
         _show(MentionNotice.fromMap(Map<String, dynamic>.from(item as Map)));
       }
@@ -81,20 +87,30 @@ class MentionWatcher {
   }
 
   static void _show(MentionNotice notice) {
-    unawaited(BackgroundCall.showMention(
-      title: notice.title,
-      text: notice.body,
-      roomCode: notice.roomCode,
-    ));
-    messengerKey.currentState?.showSnackBar(SnackBar(
-      duration: const Duration(seconds: 8),
-      content: Text('${notice.title}:\n${notice.body}', maxLines: 3, overflow: TextOverflow.ellipsis),
-      action: notice.roomCode.isEmpty
-          ? null
-          : SnackBarAction(
-              label: 'Открыть',
-              onPressed: () => AppState.instance.pendingJoinCode.value = notice.roomCode,
-            ),
-    ));
+    if (!AppState.instance.settings.messageNotifications) return;
+    unawaited(
+      BackgroundCall.showMention(
+        title: notice.title,
+        text: notice.body,
+        roomCode: notice.roomCode,
+      ),
+    );
+    messengerKey.currentState?.showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 8),
+        content: Text(
+          '${notice.title}:\n${notice.body}',
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
+        ),
+        action: notice.roomCode.isEmpty
+            ? null
+            : SnackBarAction(
+                label: 'Открыть',
+                onPressed: () =>
+                    AppState.instance.pendingJoinCode.value = notice.roomCode,
+              ),
+      ),
+    );
   }
 }

@@ -10,6 +10,8 @@ class PersistentChat {
     required this.name,
     required this.members,
     required this.unread,
+    this.isDirect = false,
+    this.isMember = true,
     this.lastName,
     this.lastBody,
   });
@@ -19,12 +21,16 @@ class PersistentChat {
   final String name;
   final int members;
   final int unread;
+  final bool isDirect;
+  final bool isMember;
   final String? lastName;
   final String? lastBody;
 
   factory PersistentChat.fromMap(Map<String, dynamic> m) {
     final last = m['last'] as Map?;
     return PersistentChat(
+      isDirect: m['direct'] == true,
+      isMember: m['is_member'] != false,
       id: m['id'] as String,
       code: m['code'] as String,
       name: m['name'] as String,
@@ -95,6 +101,43 @@ class ChatsRepository {
         PersistentChat.fromMap(Map<String, dynamic>.from(m as Map)),
     ];
   }
+
+  Future<List<Map<String, dynamic>>> contacts() async {
+    final raw = await _db.rpc('chat_contacts').timeout(_timeout);
+    return [
+      for (final item in raw as List) Map<String, dynamic>.from(item as Map),
+    ];
+  }
+
+  Future<PersistentChat> openDirect(String user) async =>
+      PersistentChat.fromMap(
+        Map<String, dynamic>.from(
+          await _db
+                  .rpc('open_direct', params: {'p_user': user})
+                  .timeout(_timeout)
+              as Map,
+        ),
+      );
+
+  Future<PersistentChat> directFromRoom(String room, String peer) async =>
+      PersistentChat.fromMap(
+        Map<String, dynamic>.from(
+          await _db
+                  .rpc(
+                    'direct_from_room',
+                    params: {'p_room': room, 'p_peer': peer},
+                  )
+                  .timeout(_timeout)
+              as Map,
+        ),
+      );
+
+  Future<PersistentChat> rejoin(String chat) async => PersistentChat.fromMap(
+    Map<String, dynamic>.from(
+      await _db.rpc('rejoin_chat', params: {'p_chat': chat}).timeout(_timeout)
+          as Map,
+    ),
+  );
 
   /// Может ли текущий пользователь создавать чаты (только администратор).
   Future<bool> canCreate() async {

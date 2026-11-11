@@ -9,6 +9,9 @@ import '../services/call_controller.dart';
 import '../services/call_session.dart';
 import '../services/ice_servers.dart';
 import '../services/mentions.dart';
+import '../services/message_notices.dart';
+import '../services/chats.dart';
+import 'chat_screen.dart';
 import '../services/updater.dart';
 import '../widgets/active_call_banner.dart';
 import '../widgets/app_update.dart';
@@ -29,6 +32,7 @@ class _HomeScreenState extends State<HomeScreen> {
   final _code = TextEditingController();
   final _chatsKey = GlobalKey<ChatsSectionState>();
   List<Room>? _rooms;
+  List<Room> _recentRooms = [];
   String? _roomsError;
   bool _joining = false;
   bool _inRoom = false;
@@ -39,11 +43,14 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    if (!_isGuest) _loadRooms();
+    _loadRooms();
     _app.pendingJoinCode.addListener(_onInvite);
     WidgetsBinding.instance.addPostFrameCallback((_) => _onInvite());
     // Упоминания в чатах комнат, пока приложение запущено.
     MentionWatcher.start();
+    unawaited(MessageNotices.start());
+    _app.pendingChatId.addListener(_onChatInvite);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onChatInvite());
     unawaited(ServerIce.refresh(_app.db));
     // Новая версия на GitHub — покажем плашку. Ошибки сети здесь не важны.
     if (Updater.supported && Updater.available.value == null) {
@@ -58,8 +65,26 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _app.pendingJoinCode.removeListener(_onInvite);
     MentionWatcher.stop();
+    MessageNotices.stop();
+    _app.pendingChatId.removeListener(_onChatInvite);
     _code.dispose();
     super.dispose();
+  }
+
+  Future<void> _onChatInvite() async {
+    final id = _app.pendingChatId.value;
+    if (id == null || !mounted) return;
+    _app.pendingChatId.value = null;
+    try {
+      final chat = await ChatsRepository(_app.db).rejoin(id);
+      if (mounted) {
+        await Navigator.of(
+          context,
+        ).push(MaterialPageRoute<void>(builder: (_) => ChatScreen(chat: chat)));
+      }
+    } catch (e) {
+      if (mounted) showError(context, describeError(e));
+    }
   }
 
   void _onInvite() {
@@ -73,9 +98,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _loadRooms() async {
     try {
       final rooms = await _app.rooms.myRooms();
+      final recent = await _app.rooms.recentRooms();
       if (!mounted) return;
       setState(() {
         _rooms = rooms;
+        _recentRooms = recent
+            .where((r) => !rooms.any((owned) => owned.id == r.id))
+            .toList();
         _roomsError = null;
       });
     } catch (e) {
@@ -141,6 +170,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ).push(MaterialPageRoute<void>(builder: (_) => RoomScreen(call: call)));
     } finally {
       _inRoom = false;
+      unawaited(_loadRooms());
     }
   }
 
@@ -315,7 +345,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: RefreshIndicator(
         onRefresh: () async {
           await Future.wait([
-            if (!_isGuest) _loadRooms(),
+            _loadRooms(),
             if (_chatsKey.currentState != null)
               _chatsKey.currentState!.reload(),
           ]);
@@ -374,6 +404,22 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             ChatsSection(key: _chatsKey),
+            if (_recentRooms.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              Text(
+                'Посещённые комнаты',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              for (final room in _recentRooms)
+                Card(
+                  child: ListTile(
+                    leading: const Icon(Icons.history),
+                    title: Text(room.name),
+                    subtitle: Text('Код: ${room.code}'),
+                    onTap: () => _openRoom(room),
+                  ),
+                ),
+            ],
             const SizedBox(height: 16),
             if (_isGuest) ..._guestInfo(context) else ..._roomsList(context),
           ],

@@ -7,6 +7,8 @@ import 'package:flutter/services.dart';
 
 import '../app_state.dart';
 import '../services/chats.dart';
+import '../services/message_notices.dart';
+import '../services/background_call.dart';
 import '../widgets/chat_bubble.dart';
 import 'errors.dart';
 
@@ -41,6 +43,8 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+    MessageNotices.activeChat = widget.chat.id;
+    unawaited(BackgroundCall.setActiveChat(widget.chat.id));
     WidgetsBinding.instance.addObserver(this);
     _scroll.addListener(_onScroll);
     unawaited(_poll());
@@ -49,6 +53,11 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    unawaited(
+      BackgroundCall.setActiveChat(
+        state == AppLifecycleState.resumed ? widget.chat.id : null,
+      ),
+    );
     // В фоне не опрашиваем: это тратит лимит посредника.
     if (state == AppLifecycleState.resumed) {
       _timer ??= Timer.periodic(_pollEvery, (_) => unawaited(_poll()));
@@ -62,6 +71,10 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    if (MessageNotices.activeChat == widget.chat.id) {
+      MessageNotices.activeChat = null;
+    }
+    unawaited(BackgroundCall.setActiveChat(null));
     WidgetsBinding.instance.removeObserver(this);
     _timer?.cancel();
     _text.dispose();
@@ -152,7 +165,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
       builder: (context) => AlertDialog(
         title: const Text('Выйти из чата?'),
         content: const Text(
-          'Переписка останется у остальных. Вернуться можно по ключу.',
+          'Переписка сохранится. Вернуться можно из списка ранее посещённых чатов.',
         ),
         actions: [
           TextButton(
@@ -186,17 +199,20 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
           children: [
             Text(widget.chat.name, overflow: TextOverflow.ellipsis),
             Text(
-              'Ключ: ${widget.chat.code}',
+              widget.chat.isDirect
+                  ? 'Личная переписка · только вы вдвоём'
+                  : 'Ключ: ${widget.chat.code}',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
         ),
         actions: [
-          IconButton(
-            tooltip: 'Пригласить (скопировать ключ)',
-            icon: const Icon(Icons.person_add_alt_1_outlined),
-            onPressed: _copyInvite,
-          ),
+          if (!widget.chat.isDirect)
+            IconButton(
+              tooltip: 'Пригласить (скопировать ключ)',
+              icon: const Icon(Icons.person_add_alt_1_outlined),
+              onPressed: _copyInvite,
+            ),
           PopupMenuButton<String>(
             onSelected: (v) {
               if (v == 'leave') unawaited(_leave());
@@ -239,7 +255,7 @@ class _ChatScreenState extends State<ChatScreen> with WidgetsBindingObserver {
                         padding: EdgeInsets.all(24),
                         child: Text(
                           'Сообщений пока нет. Напишите первым!\n'
-                          'Позовите друзей: значок вверху копирует ключ чата.',
+                          'Начните переписку.',
                           textAlign: TextAlign.center,
                         ),
                       ),

@@ -1,5 +1,7 @@
 package ru.shronshiki.shronshiki
 
+import com.google.firebase.FirebaseApp
+import com.google.firebase.messaging.FirebaseMessaging
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.Notification
@@ -24,6 +26,7 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         val channel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "shronshiki/call")
         this.channel = channel
+        MessagePushService.tokenListener = { token -> runOnUiThread { channel.invokeMethod("onPushToken", token) } }
         CallService.listener = { action -> channel.invokeMethod("onAction", action) }
         MediaButtons.onButton = { key -> channel.invokeMethod("onMediaKey", key) }
 
@@ -63,6 +66,35 @@ class MainActivity : FlutterActivity() {
                         call.argument<String>("text") ?: "",
                         call.argument<String>("code") ?: "",
                     )
+                    result.success(null)
+                }
+                "configureMessages" -> {
+                    val enabled=call.argument<Boolean>("enabled") ?: false
+                    val user=call.argument<String>("user")
+                    val prefs=getSharedPreferences("message_push",MODE_PRIVATE)
+                    val editor=prefs.edit().putBoolean("enabled",enabled).putString("user",user)
+                    if(prefs.getString("user",null)!=user) editor.remove("seen")
+                    editor.apply()
+                    val manager=getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+                    if(!enabled && Build.VERSION.SDK_INT>=26) manager.activeNotifications.filter { it.notification.channelId=="shronshiki_messages" }.forEach { manager.cancel(it.id) }
+                    val app=FirebaseApp.getApps(this).firstOrNull() ?: FirebaseApp.initializeApp(this)
+                    if(!enabled) { result.success(prefs.getString("token",null)) }
+                    else if(app==null) { result.success(null) }
+                    else {
+                        FirebaseMessaging.getInstance().isAutoInitEnabled=enabled
+                        FirebaseMessaging.getInstance().token.addOnCompleteListener { task ->
+                            if(task.isSuccessful) prefs.edit().putString("token",task.result).apply()
+                            result.success(if(task.isSuccessful) task.result else null)
+                        }
+                    }
+                }
+                "activeChat" -> {
+                    getSharedPreferences("message_push",MODE_PRIVATE).edit().putString("activeChat",call.arguments as? String).apply()
+                    result.success(null)
+                }
+                "showMessage" -> {
+                    val data=(call.arguments as? Map<*,*>)?.entries?.associate { it.key.toString() to (it.value?.toString() ?: "") } ?: emptyMap()
+                    MessageAlerts.show(this,data)
                     result.success(null)
                 }
                 "abi" -> result.success(AppUpdater.abi)
@@ -147,6 +179,8 @@ class MainActivity : FlutterActivity() {
         MediaButtons.handleKey(event) || super.dispatchKeyEvent(event)
 
     override fun onDestroy() {
+        MessagePushService.tokenListener=null
+        getSharedPreferences("message_push",MODE_PRIVATE).edit().remove("activeChat").apply()
         if (CallService.listener != null && isFinishing) {
             // Экран приложения закрыт окончательно — звонка больше нет.
             stopService(Intent(this, CallService::class.java))
