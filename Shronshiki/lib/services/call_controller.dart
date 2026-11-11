@@ -264,6 +264,8 @@ class CallController extends ChangeNotifier {
 
   final Map<String, double> _participantVolumes = {};
   double screenVolume = 1;
+  // Native WebRTC supports gain above unity; HTML media volume stops at 1.
+  double get maxScreenVolume => kIsWeb ? 1 : 2.5;
   bool screenHidden = false;
 
   double participantVolume(String peer) => _participantVolumes[peer] ?? 1;
@@ -276,7 +278,7 @@ class CallController extends ChangeNotifier {
   }
 
   void setScreenVolume(double volume) {
-    screenVolume = volume.clamp(0, 1);
+    screenVolume = volume.clamp(0, maxScreenVolume);
     for (final entry in _peers.entries) {
       unawaited(_applyIncomingAudio(entry.key, entry.value));
     }
