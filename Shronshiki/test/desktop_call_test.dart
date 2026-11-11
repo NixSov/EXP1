@@ -23,6 +23,8 @@ class _Call extends Fake implements CallController {
   @override
   bool get serverLost => false;
   @override
+  bool get screenHidden => false;
+  @override
   bool get sharingScreen => false;
   @override
   bool get muted => false;

@@ -78,6 +78,14 @@ class RoomsRepository {
   Future<void> setCode(String id, String code) =>
       _db.from('rooms').update({'code': code.trim()}).eq('id', id);
 
+  Future<List<Room>> recentRooms() async {
+    final raw = await _db.rpc('recent_rooms', get: true).timeout(_timeout);
+    return [
+      for (final row in raw as List)
+        Room.fromMap(Map<String, dynamic>.from(row as Map)),
+    ];
+  }
+
   Future<List<Room>> myRooms() async {
     final uid = _db.auth.currentUser?.id;
     if (uid == null) return [];

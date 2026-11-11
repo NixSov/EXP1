@@ -22,6 +22,7 @@ class AppState {
   final ThemeSettings theme;
 
   /// Код комнаты из ссылки shronshiki://join/КОД, ожидающий входа.
+  final ValueNotifier<String?> pendingChatId = ValueNotifier(null);
   final ValueNotifier<String?> pendingJoinCode = ValueNotifier(null);
 
   bool supabaseReady = false;
@@ -76,6 +77,12 @@ class AppState {
     }
     try {
       AppLinks().uriLinkStream.listen((uri) {
+        if (uri.scheme == 'shronshiki' &&
+            uri.host == 'chat' &&
+            uri.pathSegments.length == 1) {
+          pendingChatId.value = uri.pathSegments.single;
+          return;
+        }
         final code = RoomsRepository.normalizeCode(
           uri.toString(),
           linkOnly: true,

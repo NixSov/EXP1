@@ -18,6 +18,10 @@
         android:label="Shronshiki"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <service android:name=".MessagePushService" android:exported="false">
+            <intent-filter><action android:name="com.google.firebase.MESSAGING_EVENT" /></intent-filter>
+        </service>
+        <meta-data android:name="firebase_messaging_auto_init_enabled" android:value="false" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -45,6 +49,7 @@
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="shronshiki" android:host="join" />
+                <data android:scheme="shronshiki" android:host="chat" />
             </intent-filter>
         </activity>
         <!-- Ссылки обрабатывает пакет app_links, а не встроенный роутер Flutter -->

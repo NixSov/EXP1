@@ -20,6 +20,7 @@ class ChatsSection extends StatefulWidget {
 class ChatsSectionState extends State<ChatsSection> {
   final _repo = ChatsRepository(AppState.instance.db);
   List<PersistentChat>? _chats;
+  Timer? _refreshTimer;
 
   /// Создавать чаты может только администратор (AdmiNix).
   bool _canCreate = false;
@@ -31,6 +32,16 @@ class ChatsSectionState extends State<ChatsSection> {
   void initState() {
     super.initState();
     unawaited(reload());
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => unawaited(reload()),
+    );
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> reload() async {
@@ -51,6 +62,15 @@ class ChatsSectionState extends State<ChatsSection> {
   }
 
   Future<void> _open(PersistentChat chat) async {
+    if (!chat.isMember) {
+      try {
+        chat = await _repo.rejoin(chat.id);
+      } catch (e) {
+        if (mounted) showError(context, describeError(e));
+        return;
+      }
+      if (!mounted) return;
+    }
     await Navigator.of(context)
         .push(MaterialPageRoute<void>(builder: (_) => ChatScreen(chat: chat)));
     // Вернулись — обновим непрочитанные (или чат исчез, если из него вышли).
@@ -66,6 +86,60 @@ class ChatsSectionState extends State<ChatsSection> {
     unawaited(reload());
     await _open(chat);
   }
+
+  Future<void> _newDirect() async {
+    try {
+      final contacts = await _repo.contacts();
+      if (!mounted) return;
+      final id = await showDialog<String>(
+        context: context,
+        builder: (context) => SimpleDialog(
+          title: const Text('Личный чат'),
+          children: [
+            if (contacts.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Text(
+                  'Войдите в общую комнату или чат с собеседником. Он появится здесь.',
+                ),
+              ),
+            for (final person in contacts)
+              SimpleDialogOption(
+                onPressed: () => Navigator.pop(context, person['id'] as String),
+                child: Text(
+                  '${person['name']} · ${(person['id'] as String).substring(0, 8)}',
+                ),
+              ),
+          ],
+        ),
+      );
+      if (id == null || !mounted) return;
+      final chat = await _repo.openDirect(id);
+      if (mounted) await _open(chat);
+    } catch (e) {
+      if (mounted) showError(context, describeError(e));
+    }
+  }
+
+  Widget _chatTile(PersistentChat c) => Card(
+    child: ListTile(
+      leading: CircleAvatar(
+        child: Icon(c.isDirect ? Icons.person_outline : Icons.forum_outlined),
+      ),
+      title: Text(c.name, overflow: TextOverflow.ellipsis),
+      subtitle: Text(
+        !c.isMember
+            ? 'Нажмите, чтобы вернуться'
+            : c.lastBody == null
+            ? (c.isDirect ? 'Личная переписка' : 'Участников: ${c.members}')
+            : '${c.lastName}: ${c.lastBody}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      trailing: c.unread > 0 ? Badge(label: Text('${c.unread}')) : null,
+      onTap: () => _open(c),
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -83,29 +157,27 @@ class ChatsSectionState extends State<ChatsSection> {
             padding: const EdgeInsets.symmetric(vertical: 14),
           ),
         ),
-        if (chats.isNotEmpty) ...[
-          const SizedBox(height: 16),
-          Text('Мои чаты', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 4),
-          for (final c in chats)
-            Card(
-              child: ListTile(
-                leading: const CircleAvatar(child: Icon(Icons.forum_outlined)),
-                title: Text(c.name, overflow: TextOverflow.ellipsis),
-                subtitle: Text(
-                  c.lastBody == null
-                      ? 'Ключ: ${c.code} · участников: ${c.members}'
-                      : '${c.lastName}: ${c.lastBody}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                trailing: c.unread > 0
-                    ? Badge(label: Text('${c.unread}'))
-                    : null,
-                onTap: () => _open(c),
-              ),
-            ),
-        ],
+        OutlinedButton.icon(
+          onPressed: _newDirect,
+          icon: const Icon(Icons.person_add_outlined),
+          label: const Text('Новый личный чат'),
+        ),
+        for (final section in [
+          (title: 'Личные чаты', items: chats.where((c) => c.isDirect)),
+          (
+            title: 'Общие постоянные чаты',
+            items: chats.where((c) => !c.isDirect && c.isMember),
+          ),
+          (
+            title: 'Ранее посещённые чаты',
+            items: chats.where((c) => !c.isDirect && !c.isMember),
+          ),
+        ])
+          if (section.items.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Text(section.title, style: Theme.of(context).textTheme.titleMedium),
+            for (final chat in section.items) _chatTile(chat),
+          ],
       ],
     );
   }

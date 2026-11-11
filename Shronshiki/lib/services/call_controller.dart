@@ -105,6 +105,7 @@ class _Peer {
   RTCRtpSender? videoSender;
   RTCRtpSender? screenAudioSender;
   final Map<String, RTCVideoRenderer> audioRenderers = {};
+  final Map<String, ({MediaStreamTrack track, bool screen})> incomingAudio = {};
 
   /// Сколько байт уже прошло по выбранной паре кандидатов (для счётчика TURN).
   int turnBytesSeen = 0;
@@ -259,6 +260,64 @@ class CallController extends ChangeNotifier {
       if (p.isLocal ? sharingScreen : p.sharingScreen) return p;
     }
     return null;
+  }
+
+  final Map<String, double> _participantVolumes = {};
+  double screenVolume = 1;
+  bool screenHidden = false;
+
+  double participantVolume(String peer) => _participantVolumes[peer] ?? 1;
+
+  void setParticipantVolume(String peer, double volume) {
+    _participantVolumes[peer] = volume.clamp(0, 1);
+    final connection = _peers[peer];
+    if (connection != null) unawaited(_applyIncomingAudio(peer, connection));
+    notifyListeners();
+  }
+
+  void setScreenVolume(double volume) {
+    screenVolume = volume.clamp(0, 1);
+    for (final entry in _peers.entries) {
+      unawaited(_applyIncomingAudio(entry.key, entry.value));
+    }
+    notifyListeners();
+  }
+
+  void setScreenHidden(bool hidden) {
+    screenHidden = hidden;
+    for (final entry in _peers.entries) {
+      for (final track
+          in entry.value.remoteVideo?.getVideoTracks() ??
+              <MediaStreamTrack>[]) {
+        track.enabled = !hidden;
+      }
+      unawaited(_applyIncomingAudio(entry.key, entry.value));
+    }
+    notifyListeners();
+  }
+
+  Future<void> _applyIncomingAudio(String remote, _Peer peer) async {
+    try {
+      for (final item in peer.incomingAudio.values) {
+        final volume = item.screen
+            ? (screenHidden ? 0.0 : screenVolume)
+            : participantVolume(remote);
+        item.track.enabled = volume > 0;
+        if (!kIsWeb) await Helper.setVolume(volume, item.track);
+      }
+      if (kIsWeb) {
+        for (final entry in peer.audioRenderers.entries) {
+          final screen = entry.key.startsWith('screen-');
+          await entry.value.setVolume(
+            screen
+                ? (screenHidden ? 0 : screenVolume)
+                : participantVolume(remote),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('incoming volume failed: $e');
+    }
   }
 
   /// Картинка демонстрации участника: поток и id видеодорожки.
@@ -649,6 +708,11 @@ class CallController extends ChangeNotifier {
     pc.onTrack = (event) {
       if (event.track.kind == 'audio') {
         final stream = event.streams.firstOrNull;
+        peer.incomingAudio[event.track.id!] = (
+          track: event.track,
+          screen: stream?.id.startsWith('screen-') ?? false,
+        );
+        unawaited(_applyIncomingAudio(remoteId, peer));
         if (kIsWeb && stream != null) {
           final screen = stream.id.startsWith('screen-');
           unawaited(_playInBrowser(peer, stream, screen: screen));
@@ -656,6 +720,7 @@ class CallController extends ChangeNotifier {
         return;
       }
       if (event.track.kind != 'video') return;
+      event.track.enabled = !screenHidden;
       peer.remoteVideo = event.streams.firstOrNull;
       peer.remoteVideoTrackId = event.track.id;
       if (!_disposed) notifyListeners();
@@ -720,6 +785,11 @@ class CallController extends ChangeNotifier {
     }
     renderer.srcObject = stream;
     if (outputId != null) await renderer.audioOutput(outputId!);
+    final remote = _peers.entries
+        .where((e) => identical(e.value, peer))
+        .firstOrNull
+        ?.key;
+    if (remote != null) await _applyIncomingAudio(remote, peer);
   }
 
   void _sendSignal(String to, String kind, Map<String, dynamic> data) {

@@ -17,10 +17,12 @@ class BackgroundCall {
   static bool get supported => !kIsWeb && Platform.isAndroid;
 
   /// Кнопка наушников / медиаклавиша управляет микрофоном.
-  static bool get hasHeadsetButton => !kIsWeb && (Platform.isAndroid || Platform.isWindows);
+  static bool get hasHeadsetButton =>
+      !kIsWeb && (Platform.isAndroid || Platform.isWindows);
 
   static bool get _channelAvailable => hasHeadsetButton;
 
+  static void Function(String)? onPushToken;
   static VoidCallback? onHangUp;
   static VoidCallback? onToggleMute;
 
@@ -30,6 +32,10 @@ class BackgroundCall {
   static void init() {
     if (!_channelAvailable) return;
     _channel.setMethodCallHandler((call) async {
+      if (call.method == 'onPushToken') {
+        onPushToken?.call('${call.arguments}');
+        return;
+      }
       if (call.method == 'onMediaKey') {
         final test = onMediaKeyTest;
         if (test != null) {
@@ -49,11 +55,19 @@ class BackgroundCall {
     });
   }
 
-  static Future<void> start({required String roomName, required bool muted}) async {
+  static Future<void> start({
+    required String roomName,
+    required bool muted,
+  }) async {
     if (!_channelAvailable) return;
     try {
-      if (supported) await _channel.invokeMethod('requestNotificationPermission');
-      await _channel.invokeMethod('start', {'title': 'Shronshiki: $roomName', 'muted': muted});
+      if (supported) {
+        await _channel.invokeMethod('requestNotificationPermission');
+      }
+      await _channel.invokeMethod('start', {
+        'title': 'Shronshiki: $roomName',
+        'muted': muted,
+      });
     } catch (e) {
       debugPrint('call service start failed: $e');
     }
@@ -111,13 +125,42 @@ class BackgroundCall {
   }) async {
     if (!_channelAvailable) return;
     try {
-      await _channel.invokeMethod(
-        supported ? 'showMention' : 'flash',
-        {'title': title, 'text': text, 'code': roomCode},
-      );
+      await _channel.invokeMethod(supported ? 'showMention' : 'flash', {
+        'title': title,
+        'text': text,
+        'code': roomCode,
+      });
     } catch (e) {
       debugPrint('mention notification failed: $e');
     }
+  }
+
+  static Future<String?> configureMessages({
+    required bool enabled,
+    required String? user,
+  }) async {
+    if (!supported) return null;
+    try {
+      return await _channel.invokeMethod<String>('configureMessages', {
+        'enabled': enabled,
+        'user': user,
+      });
+    } catch (e) {
+      debugPrint('push registration unavailable: $e');
+      return null;
+    }
+  }
+
+  static Future<void> setActiveChat(String? chat) async {
+    if (!supported) return;
+    try {
+      await _channel.invokeMethod('activeChat', chat);
+    } catch (_) {}
+  }
+
+  static Future<void> showMessage(Map<String, dynamic> notice) async {
+    if (!supported) return;
+    await _channel.invokeMethod('showMessage', notice);
   }
 
   static Future<void> moveToBack() async {
@@ -130,7 +173,10 @@ class BackgroundCall {
   static Future<bool> isIgnoringBatteryOptimizations() async {
     if (!supported) return true;
     try {
-      return await _channel.invokeMethod<bool>('isIgnoringBatteryOptimizations') ?? false;
+      return await _channel.invokeMethod<bool>(
+            'isIgnoringBatteryOptimizations',
+          ) ??
+          false;
     } catch (_) {
       return false;
     }

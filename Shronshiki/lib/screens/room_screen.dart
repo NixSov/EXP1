@@ -8,6 +8,9 @@ import '../services/call_controller.dart';
 import '../services/call_session.dart';
 import 'errors.dart';
 import 'settings_screen.dart';
+import 'chat_screen.dart';
+import '../app_state.dart';
+import '../services/chats.dart';
 import '../widgets/room_chat_sheet.dart';
 import '../widgets/screen_share.dart';
 
@@ -270,12 +273,90 @@ class _RoomScreenState extends State<RoomScreen> {
 
   void _pickOutput() => _pickDevice(input: false);
 
+  Future<void> _participantOptions(Participant participant) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheet) => ListenableBuilder(
+        listenable: _call,
+        builder: (context, _) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  participant.name,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                const Text('Громкость голоса для вас'),
+                Slider(
+                  value: _call.participantVolume(participant.peerId),
+                  divisions: 100,
+                  label:
+                      '${(_call.participantVolume(participant.peerId) * 100).round()}%',
+                  onChanged: (v) =>
+                      _call.setParticipantVolume(participant.peerId, v),
+                ),
+                if (participant.sharingScreen) ...[
+                  const Text('Громкость трансляции для вас'),
+                  Slider(
+                    value: _call.screenVolume,
+                    divisions: 100,
+                    label: '${(_call.screenVolume * 100).round()}%',
+                    onChanged: _call.setScreenVolume,
+                  ),
+                  SwitchListTile(
+                    title: const Text('Показывать и слушать трансляцию'),
+                    value: !_call.screenHidden,
+                    onChanged: (v) {
+                      _pinned = false;
+                      _call.setScreenHidden(!v);
+                    },
+                  ),
+                ],
+                TextButton.icon(
+                  icon: const Icon(Icons.chat_outlined),
+                  label: const Text('Написать лично'),
+                  onPressed: () async {
+                    Navigator.pop(sheet);
+                    try {
+                      final chat = await ChatsRepository(AppState.instance.db)
+                          .directFromRoom(_call.room.id, participant.peerId);
+                      if (mounted) {
+                        await Navigator.of(this.context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => ChatScreen(chat: chat),
+                          ),
+                        );
+                      }
+                    } catch (e) {
+                      if (mounted) showError(this.context, describeError(e));
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _participantWidget(Participant p, {bool compact = false}) => InkWell(
+    borderRadius: BorderRadius.circular(12),
+    onTap: p.isLocal ? null : () => _participantOptions(p),
+    child: compact
+        ? _CompactParticipant(participant: p)
+        : _ParticipantTile(participant: p),
+  );
+
   Widget _inRoom(BuildContext context) {
     final participants = _call.participants;
     final scheme = Theme.of(context).colorScheme;
     final output = _outputLook;
     final sharer = _call.screenSharer;
-    final watching = sharer != null && !sharer.isLocal;
+    final watching = sharer != null && !sharer.isLocal && !_call.screenHidden;
     final desktop = MediaQuery.sizeOf(context).width >= 800;
     if (_pinned && watching) {
       return CallbackShortcuts(
@@ -313,6 +394,31 @@ class _RoomScreenState extends State<RoomScreen> {
     }
     return Column(
       children: [
+        if (sharer != null && !sharer.isLocal)
+          ListTile(
+            dense: true,
+            leading: Icon(
+              _call.screenHidden ? Icons.visibility_off : Icons.screen_share,
+            ),
+            title: Text(
+              _call.screenHidden
+                  ? 'Трансляция скрыта и выключена для вас'
+                  : 'Трансляция: ${sharer.name}',
+            ),
+            onTap: () => _participantOptions(sharer),
+            trailing: IconButton(
+              tooltip: _call.screenHidden
+                  ? 'Включить трансляцию'
+                  : 'Отключить трансляцию для себя',
+              icon: Icon(
+                _call.screenHidden ? Icons.visibility : Icons.visibility_off,
+              ),
+              onPressed: () {
+                _pinned = false;
+                _call.setScreenHidden(!_call.screenHidden);
+              },
+            ),
+          ),
         if (_call.serverLost)
           Container(
             width: double.infinity,
@@ -367,7 +473,7 @@ class _RoomScreenState extends State<RoomScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               children: [
                 for (final p in participants)
-                  _CompactParticipant(participant: p),
+                  _participantWidget(p, compact: true),
               ],
             ),
           ),
@@ -398,7 +504,7 @@ class _RoomScreenState extends State<RoomScreen> {
                           SizedBox(
                             width: 180,
                             height: 200,
-                            child: _ParticipantTile(participant: p),
+                            child: _participantWidget(p),
                           ),
                       ],
                     ),
@@ -413,10 +519,7 @@ class _RoomScreenState extends State<RoomScreen> {
                 crossAxisCount: 2,
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
-                children: [
-                  for (final p in participants)
-                    _ParticipantTile(participant: p),
-                ],
+                children: [for (final p in participants) _participantWidget(p)],
               ),
             ),
         ],
